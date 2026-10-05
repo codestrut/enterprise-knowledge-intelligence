@@ -4,6 +4,7 @@ from src.chunking.text_chunker import chunk_documents
 from src.embeddings.embedder import Embedder
 from src.generation.citation_validator import validate_citations
 from src.generation.context_builder import build_context
+from src.generation.evidence_gate import check_evidence
 from src.generation.grounding_evaluator import GroundingEvaluator
 from src.generation.llm_client import LLMClient
 from src.generation.prompt_builder import build_prompt
@@ -52,6 +53,26 @@ class RAGPipeline:
             top_k=top_k,
         )
 
+        evidence_result = check_evidence(
+            retrieved_documents
+        )
+
+        if not evidence_result["sufficient"]:
+            return {
+                "question": question,
+                "answer": (
+                    "I don't have sufficient evidence in the "
+                    "available knowledge base to answer that question."
+                ),
+                "sources": retrieved_documents,
+                "source_map": {},
+                "citations": [],
+                "invalid_citations": [],
+                "grounding": [],
+                "evidence": evidence_result,
+                "refused": True,
+            }
+
         context, source_map = build_context(
             retrieved_documents
         )
@@ -82,4 +103,6 @@ class RAGPipeline:
             "citations": citation_result["citations"],
             "invalid_citations": citation_result["invalid_citations"],
             "grounding": grounding_result,
+            "evidence": evidence_result,
+            "refused": False,
         }

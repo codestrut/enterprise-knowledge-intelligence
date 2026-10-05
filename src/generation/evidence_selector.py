@@ -8,7 +8,7 @@ from src.embeddings.embedder import Embedder
 
 
 class EvidenceSelector:
-    """Select the most relevant evidence sentences for a claim."""
+    """Select the most relevant evidence units for a claim."""
 
     def __init__(
         self,
@@ -24,7 +24,7 @@ class EvidenceSelector:
         evidence,
         top_k=2,
     ):
-        """Select the most relevant evidence sentences for a claim."""
+        """Select the most relevant evidence units for a claim."""
 
         if not claim or not claim.strip():
             return []
@@ -35,9 +35,9 @@ class EvidenceSelector:
         if top_k < 1:
             raise ValueError("top_k must be at least 1.")
 
-        sentences = self._split_sentences(evidence)
+        evidence_units = self._split_evidence(evidence)
 
-        if not sentences:
+        if not evidence_units:
             return []
 
         claim_embedding = self.embedder.embed_text(
@@ -46,8 +46,8 @@ class EvidenceSelector:
 
         sentence_embeddings = self.embedder.embed_documents(
             [
-                {"text": sentence}
-                for sentence in sentences
+                {"text": unit}
+                for unit in evidence_units
             ]
         )
 
@@ -77,7 +77,7 @@ class EvidenceSelector:
                 continue
 
             results.append({
-                "text": sentences[index],
+                "text": evidence_units[index],
                 "score": score,
             })
 
@@ -87,8 +87,12 @@ class EvidenceSelector:
         return results
 
     @staticmethod
-    def _split_sentences(text):
-        """Split text into reasonably clean sentence units."""
+    def _split_evidence(text):
+        """
+        Split evidence into semantically useful units.
+
+        Handles normal sentences and PDF-extracted numbered lists.
+        """
 
         text = re.sub(
             r"\s+",
@@ -104,11 +108,69 @@ class EvidenceSelector:
             text,
         )
 
-        return [
-            sentence.strip()
-            for sentence in sentences
-            if sentence.strip()
-        ]
+        units = []
+
+        index = 0
+
+        while index < len(sentences):
+
+            current = sentences[index].strip()
+
+            if not current:
+                index += 1
+                continue
+
+            # A PDF may split a numbered list introduction like:
+            #
+            # "Every Organizational Profile includes one or both
+            # of the following: 1."
+            #
+            # Join the introduction with the first list item.
+            if (
+                re.search(
+                    r":\s*\d+\.$",
+                    current,
+                )
+                and index + 1 < len(sentences)
+            ):
+                current = (
+                    current
+                    + " "
+                    + sentences[index + 1].strip()
+                )
+
+                index += 2
+
+                units.append(current)
+
+                continue
+
+            # A numbered marker such as "2." may be separated from
+            # the actual list item by PDF extraction.
+            if (
+                re.fullmatch(
+                    r"\d+\.",
+                    current,
+                )
+                and index + 1 < len(sentences)
+            ):
+                current = (
+                    current
+                    + " "
+                    + sentences[index + 1].strip()
+                )
+
+                index += 2
+
+                units.append(current)
+
+                continue
+
+            units.append(current)
+
+            index += 1
+
+        return units
 
     @staticmethod
     def _normalize(embeddings):
