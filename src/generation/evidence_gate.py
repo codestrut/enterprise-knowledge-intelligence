@@ -1,6 +1,6 @@
 """Evidence sufficiency gate for the RAG pipeline."""
 
-DEFAULT_THRESHOLD = 4.0
+DEFAULT_THRESHOLD = 4.3
 
 
 def check_evidence(retrieved_documents, threshold=DEFAULT_THRESHOLD):

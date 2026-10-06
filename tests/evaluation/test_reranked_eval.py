@@ -42,6 +42,11 @@ results = []
 
 for item in EVALUATION_DATASET:
 
+    # Retrieval-quality evaluation applies only to
+    # questions that are expected to be answerable.
+    if not item["answerable"]:
+        continue
+
     relevant_chunks = resolve_relevant_chunks(
         chunks,
         item["relevant_chunks"],
@@ -85,48 +90,35 @@ print("=" * 80)
 
 for k in K_VALUES:
 
-    hit_scores = []
-    recall_scores = []
-
-    for result in results:
-
-        hit_scores.append(
-            hit_at_k(
-                result["retrieved_chunks"],
-                result["relevant_chunks"],
-                k,
-            )
+    hit_rate = sum(
+        hit_at_k(
+            result["retrieved_chunks"],
+            result["relevant_chunks"],
+            k,
         )
+        for result in results
+    ) / len(results)
 
-        recall_scores.append(
-            recall_at_k(
-                result["retrieved_chunks"],
-                result["relevant_chunks"],
-                k,
-            )
+    recall = sum(
+        recall_at_k(
+            result["retrieved_chunks"],
+            result["relevant_chunks"],
+            k,
         )
-
-    hit_rate = sum(hit_scores) / len(hit_scores)
-    recall = sum(recall_scores) / len(recall_scores)
+        for result in results
+    ) / len(results)
 
     print(f"Hit@{k}:    {hit_rate:.3f}")
     print(f"Recall@{k}: {recall:.3f}")
 
 
-mrr_scores = []
-
-for result in results:
-
-    mrr_scores.append(
-        reciprocal_rank(
-            result["retrieved_chunks"],
-            result["relevant_chunks"],
-        )
+mrr = sum(
+    reciprocal_rank(
+        result["retrieved_chunks"],
+        result["relevant_chunks"],
     )
+    for result in results
+) / len(results)
 
-
-mrr = sum(mrr_scores) / len(mrr_scores)
 
 print(f"MRR:        {mrr:.3f}")
-
-print("=" * 80)

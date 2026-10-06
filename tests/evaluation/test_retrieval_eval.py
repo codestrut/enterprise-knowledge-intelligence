@@ -45,7 +45,6 @@ for item in EVALUATION_DATASET:
         chunks,
         item["relevant_chunks"],
     )
-
     if not relevant_chunks:
         print(
             f"WARNING: No matching chunk found for: "

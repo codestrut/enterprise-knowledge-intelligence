@@ -14,16 +14,15 @@ class EvidenceSelector:
         self,
         embedder=None,
         similarity_threshold=0.30,
+        semantic_weight=0.70,
+        lexical_weight=0.30,
     ):
         self.embedder = embedder or Embedder()
         self.similarity_threshold = similarity_threshold
+        self.semantic_weight = semantic_weight
+        self.lexical_weight = lexical_weight
 
-    def select(
-        self,
-        claim,
-        evidence,
-        top_k=2,
-    ):
+    def select(self, claim, evidence, top_k=2):
         """Select the most relevant evidence units for a claim."""
 
         if not claim or not claim.strip():
@@ -40,45 +39,63 @@ class EvidenceSelector:
         if not evidence_units:
             return []
 
-        claim_embedding = self.embedder.embed_text(
-            claim
+        claim_embedding = self.embedder.embed_text(claim)
+
+        evidence_embeddings = self.embedder.embed_documents(
+            [{"text": unit} for unit in evidence_units]
         )
 
-        sentence_embeddings = self.embedder.embed_documents(
+        claim_embedding = self._normalize(claim_embedding)
+        evidence_embeddings = self._normalize(
+            evidence_embeddings
+        )
+
+        semantic_scores = evidence_embeddings @ claim_embedding
+
+        lexical_scores = np.array(
             [
-                {"text": unit}
-                for unit in evidence_units
-            ]
+                self._lexical_similarity(
+                    claim,
+                    evidence_unit,
+                )
+                for evidence_unit in evidence_units
+            ],
+            dtype=np.float32,
         )
 
-        claim_embedding = self._normalize(
-            claim_embedding
-        )
-
-        sentence_embeddings = self._normalize(
-            sentence_embeddings
-        )
-
-        similarities = (
-            sentence_embeddings @ claim_embedding
+        combined_scores = (
+            self.semantic_weight * semantic_scores
+            + self.lexical_weight * lexical_scores
         )
 
         ranked_indices = np.argsort(
-            similarities
+            combined_scores
         )[::-1]
 
         results = []
 
         for index in ranked_indices:
 
-            score = float(similarities[index])
+            semantic_score = float(
+                semantic_scores[index]
+            )
 
-            if score < self.similarity_threshold:
+            lexical_score = float(
+                lexical_scores[index]
+            )
+
+            combined_score = float(
+                combined_scores[index]
+            )
+
+            if combined_score < self.similarity_threshold:
                 continue
 
             results.append({
                 "text": evidence_units[index],
-                "score": score,
+                "score": combined_score,
+                "semantic_score": semantic_score,
+                "lexical_score": lexical_score,
             })
 
             if len(results) >= top_k:
@@ -87,12 +104,38 @@ class EvidenceSelector:
         return results
 
     @staticmethod
-    def _split_evidence(text):
-        """
-        Split evidence into semantically useful units.
+    def _lexical_similarity(claim, evidence):
+        """Calculate normalized lexical overlap between claim and evidence."""
 
-        Handles normal sentences and PDF-extracted numbered lists.
-        """
+        claim_tokens = set(
+            EvidenceSelector._tokenize(claim)
+        )
+
+        evidence_tokens = set(
+            EvidenceSelector._tokenize(evidence)
+        )
+
+        if not claim_tokens or not evidence_tokens:
+            return 0.0
+
+        overlap = claim_tokens.intersection(
+            evidence_tokens
+        )
+
+        return len(overlap) / len(claim_tokens)
+
+    @staticmethod
+    def _tokenize(text):
+        """Extract normalized lexical tokens."""
+
+        return re.findall(
+            r"\b[a-zA-Z0-9]+(?:[._-][a-zA-Z0-9]+)*\b",
+            text.lower(),
+        )
+
+    @staticmethod
+    def _split_evidence(text):
+        """Split evidence into semantically useful units."""
 
         text = re.sub(
             r"\s+",
@@ -103,13 +146,38 @@ class EvidenceSelector:
         if not text:
             return []
 
+        # First split structured NIST CSF outcomes.
+        #
+        # Example:
+        # GV.RR-01: ...
+        # GV.RR-02: ...
+        # GV.RR-03: ...
+        #
+        # Each outcome becomes its own evidence unit.
+        outcome_pattern = re.compile(
+            r"(?=\b[A-Z]{2}\.[A-Z]{2}-\d{2}\s*:)"
+        )
+
+        outcome_units = [
+            unit.strip()
+            for unit in outcome_pattern.split(text)
+            if unit.strip()
+        ]
+
+        # If NIST-style outcomes were found, process each
+        # outcome independently.
+        if len(outcome_units) > 1:
+            return EvidenceSelector._split_structured_units(
+                outcome_units
+            )
+
+        # Fall back to sentence-based splitting.
         sentences = re.split(
             r"(?<=[.!?])\s+",
             text,
         )
 
         units = []
-
         index = 0
 
         while index < len(sentences):
@@ -120,17 +188,8 @@ class EvidenceSelector:
                 index += 1
                 continue
 
-            # A PDF may split a numbered list introduction like:
-            #
-            # "Every Organizational Profile includes one or both
-            # of the following: 1."
-            #
-            # Join the introduction with the first list item.
             if (
-                re.search(
-                    r":\s*\d+\.$",
-                    current,
-                )
+                re.search(r":\s*\d+\.$", current)
                 and index + 1 < len(sentences)
             ):
                 current = (
@@ -140,18 +199,12 @@ class EvidenceSelector:
                 )
 
                 index += 2
-
                 units.append(current)
 
                 continue
 
-            # A numbered marker such as "2." may be separated from
-            # the actual list item by PDF extraction.
             if (
-                re.fullmatch(
-                    r"\d+\.",
-                    current,
-                )
+                re.fullmatch(r"\d+\.", current)
                 and index + 1 < len(sentences)
             ):
                 current = (
@@ -161,31 +214,41 @@ class EvidenceSelector:
                 )
 
                 index += 2
-
                 units.append(current)
 
                 continue
 
             units.append(current)
-
             index += 1
 
         return units
 
     @staticmethod
-    def _normalize(embeddings):
-        """Normalize embeddings for cosine similarity."""
+    def _split_structured_units(units):
+        """Split NIST outcome units while preserving full content."""
 
+        results = []
+
+        for unit in units:
+
+            unit = unit.strip()
+
+            if not unit:
+                continue
+
+            results.append(unit)
+
+        return results
+
+    @staticmethod
+    def _normalize(embeddings):
         embeddings = np.asarray(
             embeddings,
             dtype=np.float32,
         )
 
         if embeddings.ndim == 1:
-
-            norm = np.linalg.norm(
-                embeddings
-            )
+            norm = np.linalg.norm(embeddings)
 
             if norm == 0:
                 return embeddings
