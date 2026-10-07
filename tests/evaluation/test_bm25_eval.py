@@ -1,122 +1,102 @@
 """Evaluate BM25 retrieval."""
 
-from src.ingestion.pdf_loader import load_pdf
 from src.chunking.text_chunker import chunk_documents
 from src.embeddings.embedder import Embedder
-from src.retrieval.bm25_retriever import BM25Retriever
 from src.evaluation.retrieval_eval import (
     EVALUATION_DATASET,
-    resolve_relevant_chunks,
     hit_at_k,
     recall_at_k,
     reciprocal_rank,
+    resolve_relevant_chunks,
 )
+from src.ingestion.pdf_loader import load_pdf
+from src.retrieval.bm25_retriever import BM25Retriever
 
 
 PDF_PATH = "data/raw/nist_csf_2.0.pdf"
 K_VALUES = [1, 3, 5]
 
 
-documents = load_pdf(PDF_PATH)
+def test_bm25_retrieval_evaluation():
+    """Evaluate BM25 retrieval against the benchmark dataset."""
 
-embedder = Embedder()
+    documents = load_pdf(PDF_PATH)
 
-chunks = chunk_documents(
-    documents,
-    tokenizer=embedder.model.tokenizer,
-    chunk_size=200,
-    overlap=30,
-)
+    embedder = Embedder()
 
-retriever = BM25Retriever(chunks)
-
-
-results = []
-
-for item in EVALUATION_DATASET:
-
-    relevant_chunks = resolve_relevant_chunks(
-        chunks,
-       item["relevant_chunks"],
+    chunks = chunk_documents(
+        documents,
+        tokenizer=embedder.model.tokenizer,
+        chunk_size=200,
+        overlap=30,
     )
 
-    if not relevant_chunks:
-        print(
-            f"WARNING: No matching chunk found for: "
-            f"{item['query']}"
+    retriever = BM25Retriever(chunks)
+
+    results = []
+
+    for item in EVALUATION_DATASET:
+
+        relevant_chunks = resolve_relevant_chunks(
+            chunks,
+            item["relevant_chunks"],
         )
-        continue
 
-    retrieved_results = retriever.retrieve(
-        item["query"],
-        top_k=max(K_VALUES),
-    )
+        if not relevant_chunks:
+            continue
 
-    retrieved_chunks = [
-        result["metadata"]["chunk_id"]
-        for result in retrieved_results
-    ]
+        retrieved_results = retriever.retrieve(
+            item["query"],
+            top_k=max(K_VALUES),
+        )
 
-    results.append({
-        "query": item["query"],
-        "retrieved_chunks": retrieved_chunks,
-        "relevant_chunks": relevant_chunks,
-    })
+        retrieved_chunks = [
+            result["metadata"]["chunk_id"]
+            for result in retrieved_results
+        ]
 
-    print()
-    print(f"QUERY: {item['query']}")
-    print(f"RELEVANT: {relevant_chunks}")
-    print(f"RETRIEVED: {retrieved_chunks}")
+        results.append({
+            "query": item["query"],
+            "retrieved_chunks": retrieved_chunks,
+            "relevant_chunks": relevant_chunks,
+        })
 
+    assert results
 
-print()
-print("=" * 80)
-print("BM25 RETRIEVAL EVALUATION")
-print("=" * 80)
+    for k in K_VALUES:
 
-for k in K_VALUES:
-
-    hit_scores = []
-    recall_scores = []
-
-    for result in results:
-
-        hit_scores.append(
+        hit_scores = [
             hit_at_k(
                 result["retrieved_chunks"],
                 result["relevant_chunks"],
                 k,
             )
-        )
+            for result in results
+        ]
 
-        recall_scores.append(
+        recall_scores = [
             recall_at_k(
                 result["retrieved_chunks"],
                 result["relevant_chunks"],
                 k,
             )
-        )
+            for result in results
+        ]
 
-    hit_rate = sum(hit_scores) / len(hit_scores)
-    recall = sum(recall_scores) / len(recall_scores)
+        hit_rate = sum(hit_scores) / len(hit_scores)
+        recall = sum(recall_scores) / len(recall_scores)
 
-    print(f"Hit@{k}:    {hit_rate:.3f}")
-    print(f"Recall@{k}: {recall:.3f}")
+        assert 0.0 <= hit_rate <= 1.0
+        assert 0.0 <= recall <= 1.0
 
-
-mrr_scores = []
-
-for result in results:
-
-    mrr_scores.append(
+    mrr_scores = [
         reciprocal_rank(
             result["retrieved_chunks"],
             result["relevant_chunks"],
         )
-    )
+        for result in results
+    ]
 
-mrr = sum(mrr_scores) / len(mrr_scores)
+    mrr = sum(mrr_scores) / len(mrr_scores)
 
-print(f"MRR:        {mrr:.3f}")
-
-print("=" * 80)
+    assert 0.0 <= mrr <= 1.0

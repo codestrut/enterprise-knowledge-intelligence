@@ -1,56 +1,55 @@
-"""Test the cross-encoder reranker."""
+"""Tests for the cross-encoder reranker."""
 
-from src.ingestion.pdf_loader import load_pdf
 from src.chunking.text_chunker import chunk_documents
+from src.embeddings.embedder import Embedder
+from src.ingestion.pdf_loader import load_pdf
 from src.retrieval.reranker import Reranker
 
 
 PDF_PATH = "data/raw/nist_csf_2.0.pdf"
 
 
-# Load document
-documents = load_pdf(PDF_PATH)
+def test_reranker():
+    """Verify the cross-encoder reranker returns ranked candidates."""
 
-# Create chunks
-chunks = chunk_documents(documents)
+    documents = load_pdf(PDF_PATH)
 
-# Load reranker
-reranker = Reranker()
+    embedder = Embedder()
 
-
-query = "What is GV.RR-01?"
-
-# Select a few candidates deliberately.
-candidate_ids = [29, 30, 28, 25, 6]
-
-candidates = [
-    chunks[chunk_id]
-    for chunk_id in candidate_ids
-]
-
-
-# Rerank candidates
-results = reranker.rerank(
-    query,
-    candidates,
-    top_k=5,
-)
-
-
-print("\n" + "=" * 80)
-print(f"QUERY: {query}")
-print("=" * 80)
-
-for rank, result in enumerate(results, start=1):
-
-    print(f"\nRank: {rank}")
-    print(f"Reranker Score: {result['score']:.4f}")
-    print(
-        f"Chunk ID: "
-        f"{result['metadata']['chunk_id']}"
+    chunks = chunk_documents(
+        documents,
+        tokenizer=embedder.model.tokenizer,
+        chunk_size=200,
+        overlap=30,
     )
-    print(
-        f"Page: "
-        f"{result['metadata']['page']}"
+
+    reranker = Reranker()
+
+    query = "What is GV.RR-01?"
+
+    candidate_ids = [29, 30, 28, 25, 6]
+
+    candidates = [
+        chunks[chunk_id]
+        for chunk_id in candidate_ids
+    ]
+
+    results = reranker.rerank(
+        query,
+        candidates,
+        top_k=5,
     )
-    print(result["text"][:500])
+
+    assert len(results) == 5
+
+    assert all(
+        "text" in result
+        and "metadata" in result
+        and "score" in result
+        for result in results
+    )
+
+    assert all(
+        "chunk_id" in result["metadata"]
+        for result in results
+    )

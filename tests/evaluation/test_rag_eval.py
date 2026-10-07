@@ -61,70 +61,17 @@ def evaluate_query(pipeline, item):
     }
 
 
-def main():
-    """Run the complete RAG evaluation."""
+def test_end_to_end_rag_evaluation():
+    """Evaluate the complete RAG pipeline against the benchmark."""
 
     pipeline = RAGPipeline(PDF_PATH)
 
-    evaluations = []
+    evaluations = [
+        evaluate_query(pipeline, item)
+        for item in EVALUATION_DATASET
+    ]
 
-    for item in EVALUATION_DATASET:
-
-        print()
-        print("=" * 80)
-        print(f"QUERY: {item['query']}")
-        print("=" * 80)
-
-        evaluation = evaluate_query(
-            pipeline,
-            item,
-        )
-
-        evaluations.append(evaluation)
-
-        print(f"Expected answerable: {evaluation['answerable']}")
-        print(f"Refused: {evaluation['refused']}")
-        print(
-            f"Evidence sufficient: "
-            f"{evaluation['evidence_sufficient']}"
-        )
-        print(
-            f"Evidence score: "
-            f"{evaluation['evidence_score']}"
-        )
-        print(
-            f"Citations: "
-            f"{evaluation['citation_count']}"
-        )
-        print(
-            f"Invalid citations: "
-            f"{evaluation['invalid_citation_count']}"
-        )
-        print(
-            f"Claims: "
-            f"{evaluation['total_claims']}"
-        )
-        print(
-            f"Grounded claims: "
-            f"{evaluation['grounded_claims']}"
-        )
-        print(
-            f"Unsupported claims: "
-            f"{evaluation['unsupported_claims']}"
-        )
-        print(
-            f"Contradicted claims: "
-            f"{evaluation['contradicted_claims']}"
-        )
-        print(
-            f"Fully grounded: "
-            f"{evaluation['fully_grounded']}"
-        )
-
-        print()
-        print("ANSWER:")
-        print(evaluation["result"]["answer"])
-
+    assert len(evaluations) == len(EVALUATION_DATASET)
 
     answerable_evaluations = [
         evaluation
@@ -138,11 +85,8 @@ def main():
         if not evaluation["answerable"]
     ]
 
-
     correct_answerable_answers = sum(
-        (
-            not evaluation["refused"]
-        )
+        not evaluation["refused"]
         for evaluation in answerable_evaluations
     )
 
@@ -181,11 +125,9 @@ def main():
         for evaluation in evaluations
     )
 
-
     answerable_count = len(answerable_evaluations)
     unanswerable_count = len(unanswerable_evaluations)
     total_count = len(evaluations)
-
 
     answer_success_rate = (
         correct_answerable_answers / answerable_count
@@ -229,54 +171,17 @@ def main():
         else 0.0
     )
 
+    assert 0.0 <= answer_success_rate <= 1.0
+    assert 0.0 <= refusal_accuracy <= 1.0
+    assert 0.0 <= citation_validity_rate <= 1.0
+    assert 0.0 <= grounded_claim_rate <= 1.0
+    assert 0.0 <= unsupported_claim_rate <= 1.0
+    assert 0.0 <= contradicted_claim_rate <= 1.0
+    assert 0.0 <= grounded_answer_rate <= 1.0
 
-    print()
-    print()
-    print("=" * 80)
-    print("END-TO-END RAG EVALUATION")
-    print("=" * 80)
-
-    print()
-    print(f"Total queries:              {total_count}")
-    print(f"Answerable queries:         {answerable_count}")
-    print(f"Unanswerable queries:       {unanswerable_count}")
-
-    print()
-    print(
-        f"Answer success rate:        "
-        f"{answer_success_rate:.3f}"
-    )
-
-    print(
-        f"Refusal accuracy:           "
-        f"{refusal_accuracy:.3f}"
-    )
-
-    print(
-        f"Citation validity rate:     "
-        f"{citation_validity_rate:.3f}"
-    )
-
-    print(
-        f"Grounded claim rate:        "
-        f"{grounded_claim_rate:.3f}"
-    )
-
-    print(
-        f"Unsupported claim rate:     "
-        f"{unsupported_claim_rate:.3f}"
-    )
-
-    print(
-        f"Contradicted claim rate:    "
-        f"{contradicted_claim_rate:.3f}"
-    )
-
-    print(
-        f"Fully grounded answer rate: "
-        f"{grounded_answer_rate:.3f}"
-    )
-
-
-if __name__ == "__main__":
-    main()
+    # These are core correctness guarantees already established
+    # by the locked RAG evaluation benchmark.
+    assert answer_success_rate == 1.0
+    assert refusal_accuracy == 1.0
+    assert citation_validity_rate == 1.0
+    assert contradicted_claim_rate == 0.0

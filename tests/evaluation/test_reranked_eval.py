@@ -1,124 +1,114 @@
 """Evaluate hybrid retrieval followed by cross-encoder reranking."""
 
-from src.ingestion.pdf_loader import load_pdf
 from src.chunking.text_chunker import chunk_documents
 from src.embeddings.embedder import Embedder
-from src.retrieval.reranked_retriever import RerankedRetriever
 from src.evaluation.retrieval_eval import (
     EVALUATION_DATASET,
-    resolve_relevant_chunks,
     hit_at_k,
     recall_at_k,
     reciprocal_rank,
+    resolve_relevant_chunks,
 )
+from src.ingestion.pdf_loader import load_pdf
+from src.retrieval.reranked_retriever import RerankedRetriever
 
 
 PDF_PATH = "data/raw/nist_csf_2.0.pdf"
 K_VALUES = [1, 3, 5]
 
 
-documents = load_pdf(PDF_PATH)
+def test_reranked_retrieval_evaluation():
+    """Evaluate hybrid retrieval plus reranking."""
 
-embedder = Embedder()
+    documents = load_pdf(PDF_PATH)
 
-chunks = chunk_documents(
-    documents,
-    tokenizer=embedder.model.tokenizer,
-    chunk_size=200,
-    overlap=30,
-)
+    embedder = Embedder()
 
-embeddings = embedder.embed_documents(chunks)
-
-retriever = RerankedRetriever(
-    chunks=chunks,
-    embeddings=embeddings,
-    embedder=embedder,
-)
-
-
-results = []
-
-
-for item in EVALUATION_DATASET:
-
-    # Retrieval-quality evaluation applies only to
-    # questions that are expected to be answerable.
-    if not item["answerable"]:
-        continue
-
-    relevant_chunks = resolve_relevant_chunks(
-        chunks,
-        item["relevant_chunks"],
+    chunks = chunk_documents(
+        documents,
+        tokenizer=embedder.model.tokenizer,
+        chunk_size=200,
+        overlap=30,
     )
 
-    if not relevant_chunks:
-        print(
-            f"WARNING: No matching chunk found for: "
-            f"{item['query']}"
+    embeddings = embedder.embed_documents(chunks)
+
+    retriever = RerankedRetriever(
+        chunks=chunks,
+        embeddings=embeddings,
+        embedder=embedder,
+    )
+
+    results = []
+
+    for item in EVALUATION_DATASET:
+
+        # Retrieval-quality evaluation applies only to
+        # questions that are expected to be answerable.
+        if not item["answerable"]:
+            continue
+
+        relevant_chunks = resolve_relevant_chunks(
+            chunks,
+            item["relevant_chunks"],
         )
-        continue
 
-    retrieved_results = retriever.retrieve(
-        item["query"],
-        top_k=max(K_VALUES),
-        candidate_k=20,
-    )
+        if not relevant_chunks:
+            continue
 
-    retrieved_chunks = [
-        result["metadata"]["chunk_id"]
-        for result in retrieved_results
+        retrieved_results = retriever.retrieve(
+            item["query"],
+            top_k=max(K_VALUES),
+            candidate_k=20,
+        )
+
+        retrieved_chunks = [
+            result["metadata"]["chunk_id"]
+            for result in retrieved_results
+        ]
+
+        results.append({
+            "query": item["query"],
+            "retrieved_chunks": retrieved_chunks,
+            "relevant_chunks": relevant_chunks,
+        })
+
+    assert results
+
+    for k in K_VALUES:
+
+        hit_scores = [
+            hit_at_k(
+                result["retrieved_chunks"],
+                result["relevant_chunks"],
+                k,
+            )
+            for result in results
+        ]
+
+        recall_scores = [
+            recall_at_k(
+                result["retrieved_chunks"],
+                result["relevant_chunks"],
+                k,
+            )
+            for result in results
+        ]
+
+        hit_rate = sum(hit_scores) / len(hit_scores)
+        recall = sum(recall_scores) / len(recall_scores)
+
+        assert 0.0 <= hit_rate <= 1.0
+        assert 0.0 <= recall <= 1.0
+
+    mrr_scores = [
+        reciprocal_rank(
+            result["retrieved_chunks"],
+            result["relevant_chunks"],
+        )
+        for result in results
     ]
 
-    results.append({
-        "query": item["query"],
-        "retrieved_chunks": retrieved_chunks,
-        "relevant_chunks": relevant_chunks,
-    })
+    mrr = sum(mrr_scores) / len(mrr_scores)
 
-    print()
-    print(f"QUERY: {item['query']}")
-    print(f"RELEVANT: {relevant_chunks}")
-    print(f"RETRIEVED: {retrieved_chunks}")
-
-
-print()
-print("=" * 80)
-print("HYBRID + RERANKER RETRIEVAL EVALUATION")
-print("=" * 80)
-
-
-for k in K_VALUES:
-
-    hit_rate = sum(
-        hit_at_k(
-            result["retrieved_chunks"],
-            result["relevant_chunks"],
-            k,
-        )
-        for result in results
-    ) / len(results)
-
-    recall = sum(
-        recall_at_k(
-            result["retrieved_chunks"],
-            result["relevant_chunks"],
-            k,
-        )
-        for result in results
-    ) / len(results)
-
-    print(f"Hit@{k}:    {hit_rate:.3f}")
-    print(f"Recall@{k}: {recall:.3f}")
-
-
-mrr = sum(
-    reciprocal_rank(
-        result["retrieved_chunks"],
-        result["relevant_chunks"],
-    )
-    for result in results
-) / len(results)
-
-
-print(f"MRR:        {mrr:.3f}")
+    assert 0.0 <= mrr <= 1.0

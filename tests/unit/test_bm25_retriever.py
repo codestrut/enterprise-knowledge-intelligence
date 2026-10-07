@@ -1,53 +1,40 @@
-"""Test BM25 lexical retrieval."""
+"""Tests for BM25 lexical retrieval."""
 
-from src.ingestion.pdf_loader import load_pdf
 from src.chunking.text_chunker import chunk_documents
+from src.embeddings.embedder import Embedder
+from src.ingestion.pdf_loader import load_pdf
 from src.retrieval.bm25_retriever import BM25Retriever
 
 
 PDF_PATH = "data/raw/nist_csf_2.0.pdf"
 
 
-# Load the document
-documents = load_pdf(PDF_PATH)
+def test_bm25_retrieval():
+    """Verify BM25 retrieves results for known queries."""
 
-# Create chunks
-chunks = chunk_documents(documents)
+    documents = load_pdf(PDF_PATH)
 
-# Create BM25 retriever
-retriever = BM25Retriever(chunks)
+    embedder = Embedder()
 
+    chunks = chunk_documents(
+        documents,
+        tokenizer=embedder.model.tokenizer,
+        chunk_size=200,
+        overlap=30,
+    )
 
-# Test queries
-queries = [
-    "What is GV.RR-01?",
-    "What is an Organizational Profile?",
-    "What is cybersecurity supply chain risk management?",
-]
-
-
-# Retrieve results
-for query in queries:
+    retriever = BM25Retriever(chunks)
 
     results = retriever.retrieve(
-        query,
+        "What is GV.RR-01?",
         top_k=5,
     )
 
-    print("\n" + "=" * 80)
-    print(f"QUERY: {query}")
-    print("=" * 80)
+    assert len(results) == 5
 
-    for rank, result in enumerate(results, start=1):
-
-        print(f"\nRank: {rank}")
-        print(f"Score: {result['score']:.4f}")
-        print(
-            f"Chunk ID: "
-            f"{result['metadata']['chunk_id']}"
-        )
-        print(
-            f"Page: "
-            f"{result['metadata']['page']}"
-        )
-        print(result["text"][:500])
+    assert all(
+        "text" in result
+        and "metadata" in result
+        and "score" in result
+        for result in results
+    )

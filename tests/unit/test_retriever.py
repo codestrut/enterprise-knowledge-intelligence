@@ -1,71 +1,51 @@
-"""Test the document retriever."""
+"""Tests for the document retriever."""
 
-from src.ingestion.pdf_loader import load_pdf
 from src.chunking.text_chunker import chunk_documents
 from src.embeddings.embedder import Embedder
+from src.ingestion.pdf_loader import load_pdf
 from src.retrieval.retriever import Retriever
 
 
-pdf_path = "data/raw/nist_csf_2.0.pdf"
-
-# 1. Load documents
-documents = load_pdf(pdf_path)
-
-# 2. Create chunks
-chunks = chunk_documents(documents)
-
-# 3. Generate document embeddings
-embedder = Embedder()
-embeddings = embedder.embed_documents(chunks)
-
-# 4. Create retriever
-retriever = Retriever(
-    chunks=chunks,
-    embeddings=embeddings,
-)
-
-# 5. Search
-queries = [
-    "What is cybersecurity risk management?",
-    "What does NIST say about cybersecurity roles and responsibilities?",
-    "What is an Organizational Profile?",
-    "How should an organization prioritize its cybersecurity risks?",
-]
+PDF_PATH = "data/raw/nist_csf_2.0.pdf"
 
 
-for query in queries:
-    print("\n")
-    print("#" * 80)
-    print(f"QUERY: {query}")
-    print("#" * 80)
+def test_retriever():
+    """Verify the vector retriever returns ranked results."""
 
-    results = retriever.retrieve(
-        query,
-        top_k=3,
+    documents = load_pdf(PDF_PATH)
+
+    embedder = Embedder()
+
+    chunks = chunk_documents(
+        documents,
+        tokenizer=embedder.model.tokenizer,
+        chunk_size=200,
+        overlap=30,
     )
 
-    for rank, result in enumerate(results, start=1):
-        print(f"\nRank: {rank}")
-        print(f"Score: {result['score']:.4f}")
-        print(f"Chunk ID: {result['metadata']['chunk_id']}")
-        print(f"Page: {result['metadata']['page']}")
-        print(result["text"][:500])
+    embeddings = embedder.embed_documents(chunks)
 
-results = retriever.retrieve(
-    query,
-    top_k=5,
-)
+    retriever = Retriever(
+        chunks=chunks,
+        embeddings=embeddings,
+        embedder=embedder,
+    )
 
-# 6. Display results
-print("\nTop Retrieved Chunks:\n")
+    results = retriever.retrieve(
+        "What is an Organizational Profile?",
+        top_k=5,
+    )
 
-for rank, result in enumerate(results, start=1):
-    print(f"{'=' * 70}")
-    print(f"Rank: {rank}")
-    print(f"Score: {result['score']:.4f}")
-    print(f"Chunk ID: {result['metadata']['chunk_id']}")
-    print(f"Page: {result['metadata']['page']}")
-    print(f"{'=' * 70}")
-    print(result["text"][:700])
-    print()
-    
+    assert len(results) == 5
+
+    assert all(
+        "text" in result
+        and "metadata" in result
+        and "score" in result
+        for result in results
+    )
+
+    assert all(
+        "chunk_id" in result["metadata"]
+        for result in results
+    )

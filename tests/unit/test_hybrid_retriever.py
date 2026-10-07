@@ -1,60 +1,51 @@
-"""Test hybrid FAISS + BM25 retrieval."""
+"""Tests for hybrid FAISS + BM25 retrieval."""
 
-from src.ingestion.pdf_loader import load_pdf
 from src.chunking.text_chunker import chunk_documents
 from src.embeddings.embedder import Embedder
+from src.ingestion.pdf_loader import load_pdf
 from src.retrieval.hybrid_retriever import HybridRetriever
 
 
 PDF_PATH = "data/raw/nist_csf_2.0.pdf"
 
 
-# Load document
-documents = load_pdf(PDF_PATH)
+def test_hybrid_retrieval():
+    """Verify hybrid retrieval returns ranked results."""
 
-# Create chunks
-chunks = chunk_documents(documents)
+    documents = load_pdf(PDF_PATH)
 
-# Generate embeddings
-embedder = Embedder()
-embeddings = embedder.embed_documents(chunks)
+    embedder = Embedder()
 
-# Create hybrid retriever
-retriever = HybridRetriever(
-    chunks=chunks,
-    embeddings=embeddings,
-)
+    chunks = chunk_documents(
+        documents,
+        tokenizer=embedder.model.tokenizer,
+        chunk_size=200,
+        overlap=30,
+    )
 
+    embeddings = embedder.embed_documents(chunks)
 
-queries = [
-    "What is GV.RR-01?",
-    "What is an Organizational Profile?",
-    "What is cybersecurity supply chain risk management?",
-    "How are access permissions and authorizations managed?",
-]
-
-
-for query in queries:
+    retriever = HybridRetriever(
+        chunks=chunks,
+        embeddings=embeddings,
+        embedder=embedder,
+    )
 
     results = retriever.retrieve(
-        query,
+        "What is GV.RR-01?",
         top_k=5,
     )
 
-    print("\n" + "=" * 80)
-    print(f"QUERY: {query}")
-    print("=" * 80)
+    assert len(results) == 5
 
-    for rank, result in enumerate(results, start=1):
+    assert all(
+        "text" in result
+        and "metadata" in result
+        and "score" in result
+        for result in results
+    )
 
-        print(f"\nRank: {rank}")
-        print(f"RRF Score: {result['score']:.6f}")
-        print(
-            f"Chunk ID: "
-            f"{result['metadata']['chunk_id']}"
-        )
-        print(
-            f"Page: "
-            f"{result['metadata']['page']}"
-        )
-        print(result["text"][:500])
+    assert all(
+        "chunk_id" in result["metadata"]
+        for result in results
+    )
