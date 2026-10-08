@@ -8,6 +8,7 @@ def chunk_documents(
     tokenizer,
     chunk_size=200,
     overlap=30,
+    document_id=None,
 ):
     """Split documents into tokenizer-aligned, paragraph-aware chunks."""
 
@@ -43,23 +44,26 @@ def chunk_documents(
         current_tokens = 0
 
         for paragraph in paragraphs:
-
             paragraph_tokens = tokenizer.encode(
                 paragraph,
                 add_special_tokens=False,
             )
-
             paragraph_token_count = len(paragraph_tokens)
 
-            # Handle paragraphs that are larger than one chunk.
             if paragraph_token_count > chunk_size:
-
                 if current_paragraphs:
+                    chunk_id = len(chunks)
+
                     chunks.append({
                         "text": "\n\n".join(current_paragraphs),
                         "metadata": {
                             **metadata,
-                            "chunk_id": len(chunks),
+                            "chunk_id": chunk_id,
+                            "chunk_key": (
+                                f"{document_id}:{chunk_id}"
+                                if document_id is not None
+                                else str(chunk_id)
+                            ),
                         },
                     })
 
@@ -114,15 +118,19 @@ def chunk_documents(
                     if not original_chunk:
                         break
 
-                    # Preserve the original text rather than using
-                    # tokenizer.decode() as the final chunk text.
                     chunk_text = original_chunk
+                    chunk_id = len(chunks)
 
                     chunks.append({
                         "text": chunk_text,
                         "metadata": {
                             **metadata,
-                            "chunk_id": len(chunks),
+                            "chunk_id": chunk_id,
+                            "chunk_key": (
+                                f"{document_id}:{chunk_id}"
+                                if document_id is not None
+                                else str(chunk_id)
+                            ),
                         },
                     })
 
@@ -145,18 +153,23 @@ def chunk_documents(
             )
 
             if required_tokens <= chunk_size:
-
                 current_paragraphs.append(paragraph)
                 current_tokens = required_tokens
-
                 continue
 
             if current_paragraphs:
+                chunk_id = len(chunks)
+
                 chunks.append({
                     "text": "\n\n".join(current_paragraphs),
                     "metadata": {
                         **metadata,
-                        "chunk_id": len(chunks),
+                        "chunk_id": chunk_id,
+                        "chunk_key": (
+                            f"{document_id}:{chunk_id}"
+                            if document_id is not None
+                            else str(chunk_id)
+                        ),
                     },
                 })
 
@@ -216,24 +229,28 @@ def chunk_documents(
             )
 
             if combined_tokens <= chunk_size:
-
                 current_paragraphs = (
                     overlap_paragraphs
                     + [paragraph]
                 )
-
                 current_tokens = combined_tokens
-
             else:
                 current_paragraphs = [paragraph]
                 current_tokens = paragraph_token_count
 
         if current_paragraphs:
+            chunk_id = len(chunks)
+
             chunks.append({
                 "text": "\n\n".join(current_paragraphs),
                 "metadata": {
                     **metadata,
-                    "chunk_id": len(chunks),
+                    "chunk_id": chunk_id,
+                    "chunk_key": (
+                        f"{document_id}:{chunk_id}"
+                        if document_id is not None
+                        else str(chunk_id)
+                    ),
                 },
             })
 

@@ -46,3 +46,34 @@ def test_chunk_documents():
         "chunk_id" in chunk["metadata"]
         for chunk in chunks
     )
+    
+def test_chunk_documents_with_document_id():
+    """Ensure chunks receive stable document-scoped identities."""
+
+    documents = load_pdf(PDF_PATH)
+
+    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+    document_id = "test-document-001"
+
+    chunks = chunk_documents(
+        documents,
+        tokenizer=embedder.tokenizer,
+        chunk_size=200,
+        overlap=30,
+        document_id=document_id,
+    )
+
+    assert len(chunks) > 0
+
+    chunk_keys = [
+        chunk["metadata"]["chunk_key"]
+        for chunk in chunks
+    ]
+
+    assert len(chunk_keys) == len(set(chunk_keys))
+
+    assert all(
+        key.startswith(f"{document_id}:")
+        for key in chunk_keys
+    )
