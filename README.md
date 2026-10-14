@@ -1,22 +1,36 @@
-# Python
-__pycache__/
-*.py[cod]
+# Enterprise Knowledge Intelligence (EKIP)
 
-# Virtual environment
-.venv/
+Retrieval-augmented question answering with evidence-gated refusal, citation
+validation and claim-level grounding. The current test corpus is the NIST
+CSF 2.0 PDF.
 
-# Environment variables/secrets
-.env
+## Setup
 
-# macOS
-.DS_Store
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+echo "OPENAI_API_KEY=..." > .env          # never commit this file
+mkdir -p data/raw                          # place nist_csf_2.0.pdf here (git-ignored)
+```
 
-# IDE
-.vscode/
+## Tests
 
-# Data
-data/raw/*
-data/processed/*
+```bash
+python -m pytest -q tests/unit                      # fast, no live LLM calls
+python -m pytest -s tests/evaluation/test_rag_eval.py   # live end-to-end run
+python -m scripts.check_chunk_lengths data/raw/nist_csf_2.0.pdf
+```
 
-# Logs
-*.log
+## Grounding evaluation workflow
+
+Live runs are stochastic (generation and claim decomposition are LLM calls).
+Freeze one run, then change code against identical inputs:
+
+```bash
+python scripts/record_eval_run.py --name <run-name>
+python scripts/replay_grounding.py reports/replay/<run-name>.json --offline
+```
+
+Claim statuses are `grounded`, `unsupported`, `contradicted` and `uncited`.
+See `docs/GROUNDING_FIXES_2026-10-12.md` for the current behavior and
+limitations.

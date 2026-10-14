@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "experiment": "ekip-llamaindex-ragas-poc-v1",
+  "timestamp_utc": "2026-10-13T22:33:50.003797+00:00",
+  "backend": "custom",
+  "document": "data/raw/nist_csf_2.0.pdf",
+  "query_count": 1,
+  "with_ragas": false,
+  "ragas_evaluator_model": null,
+  "metrics": {
+    "answer_success_rate": 0.0,
+    "refusal_accuracy": null,
+    "citation_validity_rate": 1.0,
+    "grounded_claim_rate": null,
+    "unsupported_claim_rate": null,
+    "contradicted_claim_rate": null,
+    "uncited_claim_rate": null,
+    "uncited_claims": 0,
+    "raw_nli_contradictions": 0,
+    "relation_guard_downgrades": 0,
+    "grounded_answer_rate": null,
+    "mean_latency_seconds": 75.381,
+    "retrieval_cases_scored": 1,
+    "hit_at_5": 1,
+    "recall_at_5": 1.0,
+    "mrr": 1.0,
+    "ragas_faithfulness_mean": null,
+    "ragas_faithfulness_scored_answers": 0,
+    "ragas_judge_errors": 0
+  },
+  "queries": [
+    {
+      "id": 1,
+      "query": "What is an Organizational Profile?",
+      "answerable": true,
+      "answered": false,
+      "refused": true,
+      "latency_seconds": 75.381,
+      "citation_valid": true,
+      "citation_count": 0,
+      "total_claims": 0,
+      "grounded_claims": 0,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        36,
+        39,
+        38,
+        106,
+        41
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [],
+      "grounding_diagnostics": [],
+      "answer": "I don't have sufficient evidence in the available knowledge base to answer that question.",
+      "retrieved_contexts": [
+        "NIST CSWP 29  The NIST Cybersecurity Framework (CSF) 2.0 \nFebruary 26, 2024 \n  6 \n3. Introduction to CSF Profiles and Tiers \nThis section defines the concepts of CSF Profiles and Tiers. \n3.1. CSF Profiles \nA CSF Organizational Profile describes an organization’s current and/or target cybersecurity \nposture in terms of the Core’s outcomes. Organizational Profiles are used to understand, tailor, \nassess, prioritize, and communicate the Core’s outcomes by considering an organization’s \nmission objectives, stakeholder expectations, threat landscape, and requirements. An \norganization can then prioritize its actions to achieve specific outcomes and communicate that \ninformation to stakeholders.  \nEvery Organizational Profile includes one or both of the following: \n1. A Cur\nrent Profile specifies the Core outcomes that an organization is currently achieving \n(or attempting to achieve",
+        "NIST CSWP 29  The NIST Cybersecurity Framework (CSF) 2.0 \nFebruary 26, 2024 \n  7 \n1. Scope the Organizational Profile. Document the high-level facts and assumptions on \nwhich the Profile will be based to define its scope. An organization can have as many \nOrganizational Profiles as desired, each with a different scope. For example, a Profile \ncould address an entire organization or be scoped to an organization’s financial systems \nor to countering ransomware threats and handling ransomware incidents involving \nthose financial systems. \n2. Gather the information needed to prepare the Organizational Profile. Examples of \ninformation may include organizational policies, risk management priorities and \nresources, enterprise risk profiles, business impact analysis (BIA) registers, cybersecurity \nrequirements and standards followed by the organization, practices and tools (e.g., \nprocedures and safeguards), and work roles.  \n3",
+        "technology, threat type, or other use \ncase. An organization can use a Community Profile as the basis for its own Target Profile. \nExamples of Community Profiles can be found on the NIST CSF website.  \nThe\n steps shown in Fig. 3 and summarized below illustrate one way that an organization could \nuse an Organizational Profile to help inform continuous improvement of its cybersecurity. \n \nFig. 3. Steps for creating and using a CSF Organizational Profile",
+        "content. \nCSF Organizational Profile \nA mechanism for describing an organization’s current and/or target cybersecurity posture in terms of the CSF \nCore’s outcomes. \nCSF Quick Start Guide \nA supplementary resource that gives brief, actionable guidance on specific CSF-related topics. \nCSF Subcategory \nA group of more specific outcomes of technical and management cybersecurity activities that comprise a CSF \nCategory. \nCSF Target Profile \nA part of an Organizational Profile that specifies the desired Core outcomes that an organization has selected and \nprioritized for achieving its cybersecurity risk management objectives. \nCSF Tier \nA characterization of the rigor of an organization’s cybersecurity risk governance and management practices . \nThere are four Tiers: Partial (Tier 1), Risk Informed (Tier 2), Repeatable (Tier 3), and Adaptive (Tier 4).",
+        "and Milestones [POA&M]) to address those gaps.  \n5. Implement the action plan, and update the Organizational Profile. Follow the action \nplan to address the gaps and move the organization toward the Target Profile. An action \nplan may have an overall deadline or be ongoing. \nGiven the importance of continual improvement, an organization can repeat these steps as \noften as needed. \nThere are additional uses for Organizational Profiles. For example, a Current Profile can be used \nto document and communicate the organization’s cybersecurity capabilities and known \nopportunities for improvement with external stakeholders, such as business partners or \nprospective customers. Also, a Target Profile can help express the organization’s cybersecurity \nrisk management requirements and expectations to suppliers, partners, and other third parties \nas a target for those parties to achieve. \n3.2. CSF Tiers \nAn organization can choose to use the Tiers to inform"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "A CSF Organizational Profile describes an organization’s current and/or target cybersecurity posture in terms of the Core’s outcomes",
+          "Organizational Profiles are used to understand, tailor, assess, prioritize, and communicate the Core’s outcomes",
+          "CSF Organizational Profile A mechanism for describing an organization’s current and/or target cybersecurity posture in terms of the CSF Core’s outcomes",
+          "Every Organizational Profile includes one or both of the following"
+        ],
+        "mapped_relevant_chunk_ids": [
+          36,
+          106
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    }
+  ],
+  "notes": [
+    "Existing EKIP citation, refusal, and grounding gates remain the hard safety checks.",
+    "Ragas faithfulness is an independent judge score and must not be treated as ground truth by itself.",
+    "Raw answers and retrieved context are omitted unless --include-text is explicitly supplied.",
+    "Retrieval metrics exclude cases whose labelled relevant chunk IDs do not map to the current corpus.",
+    "LlamaIndex reranker scores are not directly comparable to EKIP RRF scores; compare ranking metrics instead."
+  ]
+}

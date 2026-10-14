@@ -1,0 +1,3 @@
+# Optional retrieval-framework dependency only.
+# Install after the main project requirements in the active virtual environment.
+llama-index-core==0.14.25

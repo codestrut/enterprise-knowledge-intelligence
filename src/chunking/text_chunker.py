@@ -2,6 +2,8 @@
 
 import re
 
+from src.chunking.token_safe_splitter import split_text_by_token_offsets
+
 
 def chunk_documents(
     documents,
@@ -70,57 +72,19 @@ def chunk_documents(
                     current_paragraphs = []
                     current_tokens = 0
 
-                step = effective_chunk_size - overlap
+                # Split oversized paragraphs with tokenizer offsets where
+                # available. Do not infer source character positions by
+                # decoding token prefixes: tokenizer normalization can shift
+                # those positions and create truncated or empty chunks.
+                paragraph_chunks = split_text_by_token_offsets(
+                    paragraph,
+                    tokenizer=tokenizer,
+                    max_tokens=effective_chunk_size,
+                    overlap=overlap,
+                )
 
-                for start in range(
-                    0,
-                    paragraph_token_count,
-                    step,
-                ):
-                    end = min(
-                        start + effective_chunk_size,
-                        paragraph_token_count,
-                    )
-
-                    token_slice = paragraph_tokens[start:end]
-
-                    if not token_slice:
-                        break
-
-                    prefix_tokens = paragraph_tokens[:start]
-
-                    start_text = tokenizer.decode(
-                        prefix_tokens,
-                        skip_special_tokens=True,
-                    )
-
-                    if start > 0:
-                        original_start = len(start_text)
-                    else:
-                        original_start = 0
-
-                    if end < paragraph_token_count:
-                        end_tokens = paragraph_tokens[:end]
-
-                        end_text = tokenizer.decode(
-                            end_tokens,
-                            skip_special_tokens=True,
-                        )
-
-                        original_end = len(end_text)
-                    else:
-                        original_end = len(paragraph)
-
-                    original_chunk = paragraph[
-                        original_start:original_end
-                    ].strip()
-
-                    if not original_chunk:
-                        break
-
-                    chunk_text = original_chunk
+                for chunk_text in paragraph_chunks:
                     chunk_id = len(chunks)
-
                     chunks.append({
                         "text": chunk_text,
                         "metadata": {

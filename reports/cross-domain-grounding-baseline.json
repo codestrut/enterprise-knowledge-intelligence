@@ -1,0 +1,765 @@
+{
+  "schema_version": 1,
+  "suite_id": "ekip-cross-domain-grounding-smoke-v1",
+  "suite_sha256": "8325b111845dc589b674f5c19380fc410f17d6cccebf54656826ab070173ed03",
+  "suite_schema_version": 1,
+  "code_revision": null,
+  "grounder_model": "cross-encoder/nli-deberta-v3-base",
+  "run_type": "grounding",
+  "generated_at_utc": "2026-10-11T11:28:11.087485+00:00",
+  "metrics": {
+    "total_cases": 18,
+    "correct_cases": 15,
+    "incorrect_cases": 3,
+    "accuracy": 0.8333333333333334,
+    "macro_f1": 0.8222222222222223,
+    "false_contradiction_rate": 0.25,
+    "false_support_rate": 0.0,
+    "per_label": {
+      "contradiction": {
+        "support": 6,
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 0,
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1": 0.8
+      },
+      "entailment": {
+        "support": 6,
+        "true_positive": 6,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "neutral": {
+        "support": 6,
+        "true_positive": 3,
+        "false_positive": 0,
+        "false_negative": 3,
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": 0.6666666666666666
+      }
+    }
+  },
+  "confusion_matrix": {
+    "contradiction": {
+      "contradiction": 6,
+      "entailment": 0,
+      "neutral": 0,
+      "unknown": 0
+    },
+    "entailment": {
+      "contradiction": 0,
+      "entailment": 6,
+      "neutral": 0,
+      "unknown": 0
+    },
+    "neutral": {
+      "contradiction": 3,
+      "entailment": 0,
+      "neutral": 3,
+      "unknown": 0
+    }
+  },
+  "by_domain": {
+    "finance": {
+      "total_cases": 3,
+      "correct_cases": 2,
+      "incorrect_cases": 1,
+      "accuracy": 0.6666666666666666,
+      "macro_f1": 0.5555555555555555,
+      "false_contradiction_rate": 0.5,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 1,
+          "false_negative": 0,
+          "precision": 0.5,
+          "recall": 1.0,
+          "f1": 0.6666666666666666
+        },
+        "entailment": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 1,
+          "true_positive": 0,
+          "false_positive": 0,
+          "false_negative": 1,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0
+        }
+      }
+    },
+    "human_resources": {
+      "total_cases": 3,
+      "correct_cases": 3,
+      "incorrect_cases": 0,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "false_contradiction_rate": 0.0,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "entailment": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      }
+    },
+    "it_operations": {
+      "total_cases": 3,
+      "correct_cases": 3,
+      "incorrect_cases": 0,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "false_contradiction_rate": 0.0,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "entailment": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      }
+    },
+    "procurement": {
+      "total_cases": 3,
+      "correct_cases": 2,
+      "incorrect_cases": 1,
+      "accuracy": 0.6666666666666666,
+      "macro_f1": 0.5555555555555555,
+      "false_contradiction_rate": 0.5,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 1,
+          "false_negative": 0,
+          "precision": 0.5,
+          "recall": 1.0,
+          "f1": 0.6666666666666666
+        },
+        "entailment": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 1,
+          "true_positive": 0,
+          "false_positive": 0,
+          "false_negative": 1,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0
+        }
+      }
+    },
+    "product_manual": {
+      "total_cases": 3,
+      "correct_cases": 3,
+      "incorrect_cases": 0,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "false_contradiction_rate": 0.0,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "entailment": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      }
+    },
+    "records_management": {
+      "total_cases": 3,
+      "correct_cases": 2,
+      "incorrect_cases": 1,
+      "accuracy": 0.6666666666666666,
+      "macro_f1": 0.5555555555555555,
+      "false_contradiction_rate": 0.5,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 1,
+          "false_negative": 0,
+          "precision": 0.5,
+          "recall": 1.0,
+          "f1": 0.6666666666666666
+        },
+        "entailment": {
+          "support": 1,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 1,
+          "true_positive": 0,
+          "false_positive": 0,
+          "false_negative": 1,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0
+        }
+      }
+    }
+  },
+  "by_document_format": {
+    "text_pair": {
+      "total_cases": 18,
+      "correct_cases": 15,
+      "incorrect_cases": 3,
+      "accuracy": 0.8333333333333334,
+      "macro_f1": 0.8222222222222223,
+      "false_contradiction_rate": 0.25,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 6,
+          "true_positive": 6,
+          "false_positive": 3,
+          "false_negative": 0,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "f1": 0.8
+        },
+        "entailment": {
+          "support": 6,
+          "true_positive": 6,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 6,
+          "true_positive": 3,
+          "false_positive": 0,
+          "false_negative": 3,
+          "precision": 1.0,
+          "recall": 0.5,
+          "f1": 0.6666666666666666
+        }
+      }
+    }
+  },
+  "by_split": {
+    "calibration": {
+      "total_cases": 12,
+      "correct_cases": 10,
+      "incorrect_cases": 2,
+      "accuracy": 0.8333333333333334,
+      "macro_f1": 0.8222222222222223,
+      "false_contradiction_rate": 0.25,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 4,
+          "true_positive": 4,
+          "false_positive": 2,
+          "false_negative": 0,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "f1": 0.8
+        },
+        "entailment": {
+          "support": 4,
+          "true_positive": 4,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 4,
+          "true_positive": 2,
+          "false_positive": 0,
+          "false_negative": 2,
+          "precision": 1.0,
+          "recall": 0.5,
+          "f1": 0.6666666666666666
+        }
+      }
+    },
+    "held_out": {
+      "total_cases": 6,
+      "correct_cases": 5,
+      "incorrect_cases": 1,
+      "accuracy": 0.8333333333333334,
+      "macro_f1": 0.8222222222222223,
+      "false_contradiction_rate": 0.25,
+      "false_support_rate": 0.0,
+      "per_label": {
+        "contradiction": {
+          "support": 2,
+          "true_positive": 2,
+          "false_positive": 1,
+          "false_negative": 0,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "f1": 0.8
+        },
+        "entailment": {
+          "support": 2,
+          "true_positive": 2,
+          "false_positive": 0,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "neutral": {
+          "support": 2,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 1,
+          "precision": 1.0,
+          "recall": 0.5,
+          "f1": 0.6666666666666666
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "hr_leave_supported",
+      "domain": "human_resources",
+      "document_type": "policy passage",
+      "document_format": "text_pair",
+      "split": "held_out",
+      "expected_label": "entailment",
+      "predicted_label": "entailment",
+      "correct": true,
+      "predicted_label_confidence": 0.9904925350908976,
+      "probabilities": {
+        "contradiction": 0.0005657181331609487,
+        "entailment": 0.9904925350908976,
+        "neutral": 0.008941746775941378
+      },
+      "claim": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "evidence": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "rationale": "The claim repeats the stated policy fact."
+    },
+    {
+      "case_id": "hr_leave_conflict",
+      "domain": "human_resources",
+      "document_type": "policy passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "contradiction",
+      "predicted_label": "contradiction",
+      "correct": true,
+      "predicted_label_confidence": 0.9994013831837204,
+      "probabilities": {
+        "contradiction": 0.9994013831837204,
+        "entailment": 0.0001538131244151259,
+        "neutral": 0.0004448036918645179
+      },
+      "claim": "Eligible employees may request up to 5 paid annual leave days per calendar year.",
+      "evidence": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "rationale": "The same policy subject and attribute have incompatible numeric values."
+    },
+    {
+      "case_id": "hr_transport_unrelated",
+      "domain": "human_resources",
+      "document_type": "policy passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "neutral",
+      "predicted_label": "neutral",
+      "correct": true,
+      "predicted_label_confidence": 0.9978698078987623,
+      "probabilities": {
+        "contradiction": 0.002012187223113211,
+        "entailment": 0.00011800487812453983,
+        "neutral": 0.9978698078987623
+      },
+      "claim": "Eligible employees receive a monthly transport allowance.",
+      "evidence": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "rationale": "The evidence is silent about transport allowances; silence is not contradiction."
+    },
+    {
+      "case_id": "finance_deadline_supported",
+      "domain": "finance",
+      "document_type": "procedure passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "entailment",
+      "predicted_label": "entailment",
+      "correct": true,
+      "predicted_label_confidence": 0.981244214190727,
+      "probabilities": {
+        "contradiction": 0.002000938181004603,
+        "entailment": 0.981244214190727,
+        "neutral": 0.01675484762826831
+      },
+      "claim": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "evidence": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "rationale": "The claim repeats the stated submission deadline."
+    },
+    {
+      "case_id": "finance_deadline_conflict",
+      "domain": "finance",
+      "document_type": "procedure passage",
+      "document_format": "text_pair",
+      "split": "held_out",
+      "expected_label": "contradiction",
+      "predicted_label": "contradiction",
+      "correct": true,
+      "predicted_label_confidence": 0.9991087777004841,
+      "probabilities": {
+        "contradiction": 0.9991087777004841,
+        "entailment": 0.00011218364676078622,
+        "neutral": 0.0007790386527550026
+      },
+      "claim": "Expense claims must be submitted within 10 calendar days of the purchase.",
+      "evidence": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "rationale": "The same deadline has incompatible numeric values."
+    },
+    {
+      "case_id": "finance_fire_training_unrelated",
+      "domain": "finance",
+      "document_type": "procedure passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "neutral",
+      "predicted_label": "contradiction",
+      "correct": false,
+      "predicted_label_confidence": 0.9666068156350365,
+      "probabilities": {
+        "contradiction": 0.9666068156350365,
+        "entailment": 0.00027167426332924905,
+        "neutral": 0.033121510101634444
+      },
+      "claim": "All new employees must complete fire-safety training.",
+      "evidence": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "rationale": "The evidence does not discuss fire-safety training."
+    },
+    {
+      "case_id": "it_acknowledgement_supported",
+      "domain": "it_operations",
+      "document_type": "incident runbook passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "entailment",
+      "predicted_label": "entailment",
+      "correct": true,
+      "predicted_label_confidence": 0.9811356585648997,
+      "probabilities": {
+        "contradiction": 0.0024066490370724266,
+        "entailment": 0.9811356585648997,
+        "neutral": 0.016457692398027794
+      },
+      "claim": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "evidence": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "rationale": "The claim repeats the incident-response service target."
+    },
+    {
+      "case_id": "it_acknowledgement_conflict",
+      "domain": "it_operations",
+      "document_type": "incident runbook passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "contradiction",
+      "predicted_label": "contradiction",
+      "correct": true,
+      "predicted_label_confidence": 0.9992968586171828,
+      "probabilities": {
+        "contradiction": 0.9992968586171828,
+        "entailment": 0.00011502885198235204,
+        "neutral": 0.0005881125308350018
+      },
+      "claim": "Critical incidents must be acknowledged within 60 minutes of detection.",
+      "evidence": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "rationale": "The same acknowledgement target has incompatible numeric values."
+    },
+    {
+      "case_id": "it_leave_unrelated",
+      "domain": "it_operations",
+      "document_type": "incident runbook passage",
+      "document_format": "text_pair",
+      "split": "held_out",
+      "expected_label": "neutral",
+      "predicted_label": "neutral",
+      "correct": true,
+      "predicted_label_confidence": 0.9996959319240976,
+      "probabilities": {
+        "contradiction": 0.00020038971309707635,
+        "entailment": 0.00010367836280538252,
+        "neutral": 0.9996959319240976
+      },
+      "claim": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "evidence": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "rationale": "Incident handling evidence says nothing about annual leave."
+    },
+    {
+      "case_id": "procurement_certificate_supported",
+      "domain": "procurement",
+      "document_type": "supplier procedure passage",
+      "document_format": "text_pair",
+      "split": "held_out",
+      "expected_label": "entailment",
+      "predicted_label": "entailment",
+      "correct": true,
+      "predicted_label_confidence": 0.9940410341318185,
+      "probabilities": {
+        "contradiction": 0.00042032849561459866,
+        "entailment": 0.9940410341318185,
+        "neutral": 0.0055386373725667655
+      },
+      "claim": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "evidence": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "rationale": "The claim repeats the supplier prerequisite."
+    },
+    {
+      "case_id": "procurement_certificate_conflict",
+      "domain": "procurement",
+      "document_type": "supplier procedure passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "contradiction",
+      "predicted_label": "contradiction",
+      "correct": true,
+      "predicted_label_confidence": 0.9999639178829692,
+      "probabilities": {
+        "contradiction": 0.9999639178829692,
+        "entailment": 9.996758002753474e-06,
+        "neutral": 2.608535902812198e-05
+      },
+      "claim": "Suppliers do not need a tax-clearance certificate before a contract is awarded.",
+      "evidence": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "rationale": "The claim explicitly negates a stated prerequisite."
+    },
+    {
+      "case_id": "procurement_leave_unrelated",
+      "domain": "procurement",
+      "document_type": "supplier procedure passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "neutral",
+      "predicted_label": "contradiction",
+      "correct": false,
+      "predicted_label_confidence": 0.9985388698194205,
+      "probabilities": {
+        "contradiction": 0.9985388698194205,
+        "entailment": 8.115285529614429e-05,
+        "neutral": 0.0013799773252833167
+      },
+      "claim": "Employees may carry unused annual leave into the next year.",
+      "evidence": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "rationale": "The supplier prerequisite says nothing about employee leave carry-over."
+    },
+    {
+      "case_id": "product_voltage_supported",
+      "domain": "product_manual",
+      "document_type": "manual passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "entailment",
+      "predicted_label": "entailment",
+      "correct": true,
+      "predicted_label_confidence": 0.9903862878177773,
+      "probabilities": {
+        "contradiction": 0.000749170718537584,
+        "entailment": 0.9903862878177773,
+        "neutral": 0.00886454146368532
+      },
+      "claim": "The gateway operates with a 12V DC power adapter.",
+      "evidence": "The gateway operates with a 12V DC power adapter.",
+      "rationale": "The claim repeats the stated power requirement."
+    },
+    {
+      "case_id": "product_voltage_conflict",
+      "domain": "product_manual",
+      "document_type": "manual passage",
+      "document_format": "text_pair",
+      "split": "held_out",
+      "expected_label": "contradiction",
+      "predicted_label": "contradiction",
+      "correct": true,
+      "predicted_label_confidence": 0.9996789729062,
+      "probabilities": {
+        "contradiction": 0.9996789729062,
+        "entailment": 6.993874214243958e-05,
+        "neutral": 0.0002510883516574054
+      },
+      "claim": "The gateway operates with a 24V DC power adapter.",
+      "evidence": "The gateway operates with a 12V DC power adapter.",
+      "rationale": "The same hardware's stated input voltage differs."
+    },
+    {
+      "case_id": "product_warranty_unrelated",
+      "domain": "product_manual",
+      "document_type": "manual passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "neutral",
+      "predicted_label": "neutral",
+      "correct": true,
+      "predicted_label_confidence": 0.9996978967916508,
+      "probabilities": {
+        "contradiction": 0.00014538145777327063,
+        "entailment": 0.00015672175057580834,
+        "neutral": 0.9996978967916508
+      },
+      "claim": "The warranty covers accidental screen damage for five years.",
+      "evidence": "The gateway operates with a 12V DC power adapter.",
+      "rationale": "The power specification says nothing about warranty coverage."
+    },
+    {
+      "case_id": "records_retention_supported",
+      "domain": "records_management",
+      "document_type": "retention policy passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "entailment",
+      "predicted_label": "entailment",
+      "correct": true,
+      "predicted_label_confidence": 0.9905200856358934,
+      "probabilities": {
+        "contradiction": 0.0004930541248670395,
+        "entailment": 0.9905200856358934,
+        "neutral": 0.008986860239239551
+      },
+      "claim": "Completed procurement records must be retained for seven years after contract closure.",
+      "evidence": "Completed procurement records must be retained for seven years after contract closure.",
+      "rationale": "The claim repeats the records-retention rule."
+    },
+    {
+      "case_id": "records_retention_conflict",
+      "domain": "records_management",
+      "document_type": "retention policy passage",
+      "document_format": "text_pair",
+      "split": "calibration",
+      "expected_label": "contradiction",
+      "predicted_label": "contradiction",
+      "correct": true,
+      "predicted_label_confidence": 0.9991905942970178,
+      "probabilities": {
+        "contradiction": 0.9991905942970178,
+        "entailment": 0.00013551555739435212,
+        "neutral": 0.0006738901455877943
+      },
+      "claim": "Completed procurement records must be retained for three years after contract closure.",
+      "evidence": "Completed procurement records must be retained for seven years after contract closure.",
+      "rationale": "The same retention requirement has incompatible durations."
+    },
+    {
+      "case_id": "records_fire_unrelated",
+      "domain": "records_management",
+      "document_type": "retention policy passage",
+      "document_format": "text_pair",
+      "split": "held_out",
+      "expected_label": "neutral",
+      "predicted_label": "contradiction",
+      "correct": false,
+      "predicted_label_confidence": 0.9996826770117079,
+      "probabilities": {
+        "contradiction": 0.9996826770117079,
+        "entailment": 7.920091058542861e-06,
+        "neutral": 0.0003094028972336139
+      },
+      "claim": "The building fire alarm must be tested every month.",
+      "evidence": "Completed procurement records must be retained for seven years after contract closure.",
+      "rationale": "The retention policy does not address building fire alarms."
+    }
+  ],
+  "notes": [
+    "This is a diagnostic benchmark, not a guarantee of real-world accuracy.",
+    "An expected neutral but predicted contradiction is a false contradiction and must remain visible.",
+    "Use held-out examples for generalization checks; do not tune only against this smoke suite."
+  ]
+}

@@ -7,7 +7,7 @@ from src.evaluation.retrieval_eval import (
     hit_at_k,
     recall_at_k,
     reciprocal_rank,
-    resolve_relevant_chunks,
+    resolve_relevant_evidence,
 )
 from src.ingestion.pdf_loader import load_pdf
 from src.retrieval.bm25_retriever import BM25Retriever
@@ -37,12 +37,20 @@ def test_bm25_retrieval_evaluation():
 
     for item in EVALUATION_DATASET:
 
-        relevant_chunks = resolve_relevant_chunks(
+        relevant_chunks, unmapped_evidence = resolve_relevant_evidence(
             chunks,
-            item["relevant_chunks"],
+            item.get("relevant_evidence", []),
+        )
+        assert not unmapped_evidence, (
+            f"Unmapped evidence anchors for {item['query']}: "
+            f"{unmapped_evidence}"
         )
 
-        if not relevant_chunks:
+        if item["answerable"] and not relevant_chunks:
+            raise AssertionError(
+                f"Answerable query has no mapped evidence: {item['query']}"
+            )
+        if not item["answerable"]:
             continue
 
         retrieved_results = retriever.retrieve(

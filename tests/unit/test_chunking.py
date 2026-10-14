@@ -46,7 +46,7 @@ def test_chunk_documents():
         "chunk_id" in chunk["metadata"]
         for chunk in chunks
     )
-    
+
 def test_chunk_documents_with_document_id():
     """Ensure chunks receive stable document-scoped identities."""
 

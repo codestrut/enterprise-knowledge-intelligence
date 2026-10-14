@@ -1,108 +1,97 @@
+"""Deterministic tests for claim decomposition prompt and response handling."""
+
+import pytest
+
 from src.generation.claim_decomposer import ClaimDecomposer
 
 
 class MockLLMClient:
-    """Mock LLM client for deterministic decomposer tests."""
-
     def __init__(self, response):
         self.response = response
+        self.prompt = None
 
     def generate(self, prompt):
+        self.prompt = prompt
         return self.response
 
 
-print("=" * 80)
-print("TEST 1 — ATOMIC CLAIM")
-print("=" * 80)
-
-claim = (
-    "An Organizational Profile describes an organization's "
-    "current and/or target cybersecurity posture."
-)
-
-decomposer = ClaimDecomposer(
-    llm_client=MockLLMClient(
-        '["An Organizational Profile describes an organization\'s '
-        'current and/or target cybersecurity posture."]'
+def test_atomic_claim_is_returned_unchanged():
+    claim = "An Organizational Profile describes an organization's posture."
+    llm = MockLLMClient(
+        '["An Organizational Profile describes an organization\'s posture."]'
     )
-)
-
-result = decomposer.decompose(claim)
-
-print(result)
-
-assert result == [
-    "An Organizational Profile describes an organization's "
-    "current and/or target cybersecurity posture."
-]
+    assert ClaimDecomposer(llm_client=llm).decompose(claim) == [claim]
 
 
-print("\n" + "=" * 80)
-print("TEST 2 — COMPOUND CLAIM")
-print("=" * 80)
-
-claim = (
-    "An Organizational Profile describes an organization's "
-    "current and/or target cybersecurity posture, and is used "
-    "to understand, tailor, assess, prioritize, and communicate "
-    "the Core's outcomes."
-)
-
-decomposer = ClaimDecomposer(
-    llm_client=MockLLMClient(
-        """[
-            "An Organizational Profile describes an organization's current and/or target cybersecurity posture.",
-            "An Organizational Profile is used to understand, tailor, assess, prioritize, and communicate the Core's outcomes."
-        ]"""
+def test_compound_claim_can_be_decomposed_without_malformed_fragments():
+    claim = (
+        "C-SCRM emphasizes establishing a program, strategy, objectives, "
+        "policies, and processes, and coordinating across suppliers."
     )
-)
-
-result = decomposer.decompose(claim)
-
-print(result)
-
-assert len(result) == 2
-assert "current and/or target cybersecurity posture" in result[0]
-assert "understand, tailor, assess, prioritize" in result[1]
-
-
-print("\n" + "=" * 80)
-print("TEST 3 — EMPTY CLAIM")
-print("=" * 80)
-
-decomposer = ClaimDecomposer(
-    llm_client=MockLLMClient("[]")
-)
-
-result = decomposer.decompose("")
-
-print(result)
-
-assert result == []
+    expected = [
+        "C-SCRM emphasizes establishing a program, strategy, objectives, policies, and processes.",
+        "C-SCRM emphasizes coordinating across suppliers.",
+    ]
+    llm = MockLLMClient(__import__("json").dumps(expected))
+    result = ClaimDecomposer(llm_client=llm).decompose(claim)
+    assert result == expected
+    assert "Do not split a coordinated list of nouns" in llm.prompt
+    assert "grammatical, independently verifiable proposition" in llm.prompt
 
 
-print("\n" + "=" * 80)
-print("TEST 4 — INVALID JSON")
-print("=" * 80)
-
-decomposer = ClaimDecomposer(
-    llm_client=MockLLMClient(
-        "This is not JSON."
+def test_context_is_included_for_pronoun_resolution_only():
+    claim = "It helps align cybersecurity risk with enterprise risk management."
+    context = (
+        "Using the NIST CSF can support integration with the enterprise risk portfolio."
     )
-)
-
-try:
-    decomposer.decompose(
-        "An organization manages cybersecurity risk."
+    llm = MockLLMClient(
+        '["The NIST CSF helps align cybersecurity risk with enterprise risk management."]'
     )
-except ValueError as exc:
-    print(f"ValueError correctly raised: {exc}")
-else:
-    raise AssertionError(
-        "Expected ValueError for invalid JSON."
+    result = ClaimDecomposer(llm_client=llm).decompose(claim, context=context)
+    assert result == [
+        "The NIST CSF helps align cybersecurity risk with enterprise risk management."
+    ]
+    assert "PRIOR ANSWER CONTEXT" in llm.prompt
+    assert context in llm.prompt
+
+
+def test_empty_claim_returns_empty_without_calling_llm():
+    llm = MockLLMClient("[]")
+    assert ClaimDecomposer(llm_client=llm).decompose(" ") == []
+    assert llm.prompt is None
+
+
+def test_invalid_json_raises_value_error():
+    decomposer = ClaimDecomposer(llm_client=MockLLMClient("not json"))
+    with pytest.raises(ValueError, match="invalid JSON"):
+        decomposer.decompose("A cybersecurity fact.")
+
+
+def test_prompt_preserves_established_referent_across_pronoun_chain():
+    claim = "It also covers cybersecurity roles for suppliers and partners."
+    context = (
+        "NIST CSF 2.0 defines GV.RR. "
+        "It states that organizational leadership is accountable."
     )
+    llm = MockLLMClient(
+        '["The NIST CSF 2.0 also covers cybersecurity roles for suppliers and partners."]'
+    )
+    result = ClaimDecomposer(llm_client=llm).decompose(claim, context=context)
+    assert result == [
+        "The NIST CSF 2.0 also covers cybersecurity roles for suppliers and partners."
+    ]
+    assert "Follow an already-established referent chain" in llm.prompt
+    assert "NIST CSF 2.0 defines GV.RR" in llm.prompt
 
 
-print("\n" + "=" * 80)
-print("ALL CLAIM DECOMPOSER TESTS PASSED")
-print("=" * 80)
+def test_prompt_requires_subject_and_agent_preservation():
+    claim = (
+        "The CSF helps executives translate cybersecurity risk into general risk language."
+    )
+    llm = MockLLMClient(
+        '["The CSF helps executives translate cybersecurity risk into general risk language."]'
+    )
+    result = ClaimDecomposer(llm_client=llm).decompose(claim)
+    assert result == [claim]
+    assert "Preserve who or what performs each action" in llm.prompt
+    assert "Never substitute a related entity as the grammatical subject or agent" in llm.prompt

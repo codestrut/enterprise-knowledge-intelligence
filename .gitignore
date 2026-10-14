@@ -11,3 +11,7 @@ data/processed/
 *.faiss
 *.index
 .ipynb_checkpoints/
+
+# Local runtime data: do not commit uploaded documents or their manifest
+data/uploads/
+data/documents_manifest.json

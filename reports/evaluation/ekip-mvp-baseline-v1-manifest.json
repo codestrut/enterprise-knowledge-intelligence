@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "freeze_name": "ekip-mvp-eval-baseline-v1",
+  "created_utc": "2026-10-13T22:27:42.490007+00:00",
+  "runtime": {
+    "python_version": "3.12.7",
+    "python_implementation": "CPython",
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "packages": {
+      "torch": "2.14.0",
+      "transformers": "5.17.0",
+      "sentence-transformers": "6.1.0",
+      "huggingface-hub": "1.32.0",
+      "faiss-cpu": "1.15.1",
+      "llama-index-core": "0.14.25",
+      "ragas": null,
+      "pypdf": "6.19.0",
+      "tiktoken": "0.14.0"
+    }
+  },
+  "git": {
+    "commit": "18b8e6962d3134e418a8f77106afb693e904208b",
+    "branch": "experiment/v6-grounding-and-claim-parser",
+    "working_tree_dirty": true,
+    "changed_paths": [
+      "gitignore",
+      "README.md",
+      "requirements.txt",
+      "src/api/main.py",
+      "src/chunking/text_chunker.py",
+      "src/evaluation/retrieval_eval.py",
+      "src/generation/claim_decomposer.py",
+      "src/generation/claim_parser.py",
+      "src/generation/evidence_gate.py",
+      "src/generation/grounding_evaluator.py",
+      "src/generation/prompt_builder.py",
+      "src/generation/semantic_grounder.py",
+      "src/rag_pipeline.py",
+      "src/retrieval/bm25_retriever.py",
+      "src/retrieval/hybrid_retriever.py",
+      "src/retrieval/reranked_retriever.py",
+      "src/retrieval/retriever.py",
+      "src/retrieval/vector_store.py",
+      "tests/evaluation/test_bm25_eval.py",
+      "tests/evaluation/test_hybrid_eval.py",
+      "tests/evaluation/test_rag_eval.py",
+      "tests/evaluation/test_reranked_eval.py",
+      "tests/evaluation/test_retrieval_eval.py",
+      "tests/unit/test_bm25_retriever.py",
+      "tests/unit/test_chunking.py",
+      "tests/unit/test_claim_decomposer.py",
+      "tests/unit/test_claim_parser.py",
+      "tests/unit/test_evidence_selector.py",
+      "tests/unit/test_grounding_evaluator.py",
+      "tests/unit/test_hybrid_retriever.py",
+      "tests/unit/test_reranker.py",
+      "tests/unit/test_retriever.py",
+      "Dockerfile",
+      "data/",
+      "docs/",
+      "examples/",
+      "reports/",
+      "requirements.docker.txt",
+      "requirements.framework-poc.txt",
+      "requirements.ragas-poc.txt",
+      "scripts/",
+      "src/chunking/token_safe_splitter.py",
+      "src/evaluation/document_independent_benchmark.py",
+      "src/evaluation/grounding_replay.py",
+      "src/evaluation/ragas_evaluator.py",
+      "src/evaluation/run_query_benchmark.py",
+      "src/frameworks/",
+      "src/generation/answer_repair.py",
+      "src/generation/grounding_relation_guard.py",
+      "src/generation/lexical_support_guard.py",
+      "src/knowledge_base.py",
+      "tests/unit/test_answer_repair.py",
+      "tests/unit/test_claim_parser_uncited.py",
+      "tests/unit/test_conflict_cue_guard.py",
+      "tests/unit/test_document_independent_benchmark.py",
+      "tests/unit/test_evidence_gate.py",
+      "tests/unit/test_grounding_evaluator_uncited.py",
+      "tests/unit/test_grounding_relation_guard.py",
+      "tests/unit/test_grounding_replay.py",
+      "tests/unit/test_grounding_support_integration.py",
+      "tests/unit/test_knowledge_base.py",
+      "tests/unit/test_lexical_support_guard.py",
+      "tests/unit/test_llamaindex_adapter_helpers.py",
+      "tests/unit/test_prompt_builder.py",
+      "tests/unit/test_refusal_conflict_regressions.py",
+      "tests/unit/test_retrieval_evidence_anchors.py",
+      "tests/unit/test_token_safe_splitter.py"
+    ],
+    "note": "Dirty state is recorded, not rejected; local uncommitted work is preserved."
+  },
+  "corpus": {
+    "path": "data/raw/nist_csf_2.0.pdf",
+    "exists": true,
+    "sha256": "3c31f46fee98cac0c4323453e5109291a213b4de7fef8c058af9bf67f717433c",
+    "size_bytes": 1518858
+  },
+  "evaluation_dataset": {
+    "module": "src/evaluation/retrieval_eval.py",
+    "query_count": 12,
+    "answerable_count": 8,
+    "unanswerable_count": 4,
+    "sha256": "5c3ee4615066b35d2c691fca7c0e6ec489f8fafe707af20e4374e7cad1eb6911",
+    "items": [
+      {
+        "query": "What is an Organizational Profile?",
+        "relevant_evidence": [
+          "A CSF Organizational Profile describes an organization’s current and/or target cybersecurity posture in terms of the Core’s outcomes",
+          "Organizational Profiles are used to understand, tailor, assess, prioritize, and communicate the Core’s outcomes",
+          "CSF Organizational Profile A mechanism for describing an organization’s current and/or target cybersecurity posture in terms of the CSF Core’s outcomes",
+          "Every Organizational Profile includes one or both of the following"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "current and/or target cybersecurity posture",
+          "CSF Core outcomes",
+          "understand",
+          "tailor",
+          "assess",
+          "prioritize",
+          "communicate",
+          "Current Profile",
+          "Target Profile"
+        ]
+      },
+      {
+        "query": "What does NIST say about cybersecurity roles and responsibilities?",
+        "relevant_evidence": [
+          "Roles, Responsibilities, and Authorities (GV.RR): Cybersecurity roles, responsibilities, and authorities to foster accountability, performance assessment, and continuous improvement are established and communicated",
+          "GV.RR-01: Organizational leadership is responsible and accountable for cybersecurity risk",
+          "GV.RR-02: Roles, responsibilities, and authorities related to cybersecurity risk management are established, communicated, understood, and enforced",
+          "GV.SC-02: Cybersecurity roles and responsibilities for suppliers, customers, and partners are established, communicated, and coordinated internally and externally"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "cybersecurity roles",
+          "responsibilities",
+          "leadership",
+          "organizational roles"
+        ]
+      },
+      {
+        "query": "What is GV.RR-01?",
+        "relevant_evidence": [
+          "GV.RR-01: Organizational leadership is responsible and accountable for cybersecurity risk and fosters a culture that is risk-aware, ethical, and continually improving"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "GV.RR-01",
+          "roles",
+          "responsibilities",
+          "cybersecurity risk management"
+        ]
+      },
+      {
+        "query": "How can an organization prioritize cybersecurity activities?",
+        "relevant_evidence": [
+          "Prioritize: Identify, organize, and prioritize actions for managing cybersecurity risks that align with the organization’s mission, legal and regulatory requirements, and risk management and governance expectations",
+          "With an understanding of stakeholder expectations and risk appetite and tolerance (as outlined in GOVERN), an organization can prioritize cybersecurity activities to make informed decisions about cybersecurity expenditures and actions"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "prioritize",
+          "cybersecurity activities",
+          "risk",
+          "organizational objectives"
+        ]
+      },
+      {
+        "query": "What are the cybersecurity risk tiers?",
+        "relevant_evidence": [
+          "The Tiers, as shown in Fig. 4 and notionally illustrated in Appendix B, reflect an organization’s practices for managing cybersecurity risk as Partial (Tier 1), Risk Informed (Tier 2), Repeatable (Tier 3), and Adaptive (Tier 4)",
+          "The Tiers characterize the rigor of an organization’s cybersecurity risk governance practices (GOVERN) and cybersecurity risk management practices (IDENTIFY, PROTECT, DETECT, RESPOND, and RECOVER)",
+          "The prioritization of cybersecurity activities and protection needs is directly informed by organizational risk objectives, the threat environment, or business/mission requirements"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "risk tiers",
+          "Tier 1",
+          "Tier 2",
+          "Tier 3",
+          "Tier 4",
+          "cybersecurity risk management"
+        ]
+      },
+      {
+        "query": "What is cybersecurity supply chain risk management?",
+        "relevant_evidence": [
+          "Cyber supply chain risk management processes are identified, established, managed, monitored, and improved by organizational stakeholders",
+          "Cybersecurity SCRM (C-SCRM) is a systematic process for managing exposure to cybersecurity risk throughout supply chains and developing appropriate response strategies, policies, processes, and procedures",
+          "GV.SC-03: Cybersecurity supply chain risk management is integrated into cybersecurity and enterprise risk management, risk assessment, and improvement processes",
+          "GV.SC-04: Suppliers are known and prioritized by criticality"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "cybersecurity supply chain risk management",
+          "suppliers",
+          "third parties",
+          "supply chain",
+          "cybersecurity risks"
+        ]
+      },
+      {
+        "query": "How are cybersecurity risks integrated into enterprise risk management?",
+        "relevant_evidence": [
+          "Governance activities are critical for incorporating cybersecurity into an organization’s broader enterprise risk management (ERM) strategy",
+          "The CSF helps organizations to translate their terminology for cybersecurity and cybersecurity risk management into general risk management language that executives will understand",
+          "GV.RM-03: Cybersecurity risk management activities and outcomes are included in enterprise risk management processes",
+          "GV.SC-03: Cybersecurity supply chain risk management is integrated into cybersecurity and enterprise risk management, risk assessment, and improvement processes"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "enterprise risk management",
+          "cybersecurity risk",
+          "risk management",
+          "organizational risk"
+        ]
+      },
+      {
+        "query": "How are access permissions and authorizations managed?",
+        "relevant_evidence": [
+          "PR.AA-05: Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed, and incorporate the principles of least privilege and separation of duties"
+        ],
+        "answerable": true,
+        "expected_concepts": [
+          "access permissions",
+          "authorizations",
+          "access control",
+          "identity",
+          "privileges"
+        ]
+      },
+      {
+        "query": "What does the NIST CSF 2.0 say about implementation costs?",
+        "relevant_evidence": [],
+        "answerable": false,
+        "expected_concepts": []
+      },
+      {
+        "query": "Which encryption algorithm does the NIST CSF 2.0 require organizations to use?",
+        "relevant_evidence": [],
+        "answerable": false,
+        "expected_concepts": []
+      },
+      {
+        "query": "What is the default password for a Cisco firewall?",
+        "relevant_evidence": [],
+        "answerable": false,
+        "expected_concepts": []
+      },
+      {
+        "query": "What is the latest Windows security vulnerability?",
+        "relevant_evidence": [],
+        "answerable": false,
+        "expected_concepts": []
+      }
+    ]
+  },
+  "pipeline_files": [
+    {
+      "path": "scripts/run_framework_eval.py",
+      "exists": true,
+      "sha256": "45f17abb91a198d617a2170166329d0d14feccaf23051e260af6c246a825c3e5",
+      "size_bytes": 16730
+    },
+    {
+      "path": "src/evaluation/retrieval_eval.py",
+      "exists": true,
+      "sha256": "249f3adbfe930dfd2f6a7dba4e1aaddfcd8148210d7b75969704f1e3aae6ce2e",
+      "size_bytes": 11260
+    },
+    {
+      "path": "src/rag_pipeline.py",
+      "exists": true,
+      "sha256": "fa2abb6b06939c62b16cd7313e21c13026a843588f706b51dbda68a7c0129db5",
+      "size_bytes": 13340
+    },
+    {
+      "path": "src/generation/prompt_builder.py",
+      "exists": true,
+      "sha256": "0ac23a83768ee4b5d234748e1faf53d91249dae82f368b897aa9546e21e90bca",
+      "size_bytes": 2918
+    },
+    {
+      "path": "src/generation/answer_repair.py",
+      "exists": true,
+      "sha256": "1f15f3845f0cb1c3367f5fe2529169dc949235a6a253d1f6a52d1325bb05475d",
+      "size_bytes": 4019
+    },
+    {
+      "path": "src/generation/grounding_evaluator.py",
+      "exists": true,
+      "sha256": "d85e7dccaa77d31b2625667f66feaa8dc25a5d040c1bf01719133748458760a6",
+      "size_bytes": 12284
+    },
+    {
+      "path": "src/generation/semantic_grounder.py",
+      "exists": true,
+      "sha256": "0fb907393d298a816f9928f785c55090cc92b7cd4eafc66782a50c68ebd9887d",
+      "size_bytes": 2799
+    },
+    {
+      "path": "src/retrieval/retriever.py",
+      "exists": true,
+      "sha256": "24ac62071df4ed12c90c763e2855aca8f3bd2053da0a65ebed74d68eb971f1a1",
+      "size_bytes": 3369
+    },
+    {
+      "path": "src/retrieval/hybrid_retriever.py",
+      "exists": true,
+      "sha256": "091325faa7ff76ca680e30182390728b137b6224c8957c3011083e62fba63eac",
+      "size_bytes": 4781
+    },
+    {
+      "path": "src/retrieval/reranked_retriever.py",
+      "exists": true,
+      "sha256": "704714180b72e5a7ac781485ce91f374a919bc9a0443c61c06db0cf10a78a077",
+      "size_bytes": 1307
+    },
+    {
+      "path": "src/retrieval/reranker.py",
+      "exists": true,
+      "sha256": "76ebe8261a83d87cc9e6551cfc55f8c2722128adeabb30b0a4df368159cf136c",
+      "size_bytes": 1006
+    }
+  ],
+  "recommended_run_commands": {
+    "custom": "python scripts/run_framework_eval.py --backend custom --report reports/framework-poc/custom-full-anchor-labels.json",
+    "llamaindex": "python scripts/run_framework_eval.py --backend llamaindex --report reports/framework-poc/llamaindex-full-anchor-labels.json"
+  },
+  "limits": [
+    "This manifest fingerprints the configuration and labelled query dataset; it is not a response replay bundle.",
+    "The current evaluation cases do not yet encode requester identity or per-user ACL permissions.",
+    "Do not compare reports if corpus hash, dataset hash, key pipeline hashes, or runtime model settings differ without documenting the difference.",
+    "The manifest stores file paths and hashes, not corpus text, API keys, tokens, or environment-variable values."
+  ]
+}

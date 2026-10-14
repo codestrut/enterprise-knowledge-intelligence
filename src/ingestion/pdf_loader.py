@@ -2,6 +2,8 @@
 
 from pypdf import PdfReader
 
+from src.ingestion.text_cleaner import clean_text
+
 
 def load_pdf(file_path):
     reader = PdfReader(file_path)
@@ -9,7 +11,7 @@ def load_pdf(file_path):
     documents = []
 
     for page_number, page in enumerate(reader.pages, start=1):
-        text = page.extract_text()
+        text = clean_text(page.extract_text() or "")
 
         documents.append({
             "text": text,

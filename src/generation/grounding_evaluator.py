@@ -1,4 +1,11 @@
-"""Claim-level grounding evaluation."""
+
+"""Claim-level grounding evaluation for the RAG pipeline.
+
+Each evaluated claim has one status: ``grounded``, ``unsupported``,
+``contradicted`` or ``uncited`` (the sentence carried no citation).
+"""
+
+import re
 
 from src.generation.claim_parser import parse_claims
 from src.generation.claim_decomposer import ClaimDecomposer
@@ -9,6 +16,30 @@ from src.generation.semantic_grounder import SemanticGrounder
 class GroundingEvaluator:
     """Evaluate whether answer claims are supported by cited evidence."""
 
+    MIN_CONTRADICTION_EVIDENCE_SCORE = 0.40
+    MIN_ENTAILMENT_PROBABILITY = 0.50
+    MIN_CONTRADICTION_PROBABILITY = 0.80
+    MIN_CONTENT_OVERLAP_RATIO = 0.25
+
+    # Common words that contribute little to identifying whether a claim
+    # and an evidence passage discuss the same subject or concept.
+    CONTRADICTION_STOPWORDS = {
+        "a", "an", "the",
+        "is", "are", "was", "were",
+        "be", "been", "being",
+        "do", "does", "did",
+        "has", "have", "had",
+        "use", "uses", "used", "using",
+        "of", "in", "on", "at", "to", "for",
+        "and", "or", "but", "by", "with", "from",
+        "that", "this", "these", "those",
+        "it", "its",
+        "system", "systems",
+        "organization", "organizations",
+        "organizational",
+        "require", "requires", "required",
+    }
+
     def __init__(
         self,
         evidence_selector=None,
@@ -16,161 +47,225 @@ class GroundingEvaluator:
         embedder=None,
         claim_decomposer=None,
     ):
+        """Initialize the grounding evaluator and its dependencies."""
+
         self.evidence_selector = (
             evidence_selector
-            or EvidenceSelector(
-                embedder=embedder,
-            )
+            if evidence_selector is not None
+            else EvidenceSelector(embedder=embedder)
         )
 
         self.grounder = (
             semantic_grounder
-            or SemanticGrounder()
+            if semantic_grounder is not None
+            else SemanticGrounder()
         )
 
         self.claim_decomposer = (
             claim_decomposer
-            or ClaimDecomposer()
+            if claim_decomposer is not None
+            else ClaimDecomposer()
         )
 
-    def evaluate(
-        self,
-        answer,
-        source_map,
-        source_documents,
-    ):
-        """Evaluate and classify every cited claim."""
+    @classmethod
+    def _has_content_overlap(cls, claim, evidence):
+        """
+        Check whether a claim and evidence share meaningful content terms.
+
+        This is a conservative lexical safeguard for contradiction decisions.
+        It is not, by itself, proof that two statements contradict each other.
+        """
+
+        def extract_terms(text):
+            return {
+                token
+                for token in re.findall(
+                    r"[a-z0-9]+",
+                    text.lower(),
+                )
+                if len(token) > 1
+                and token not in cls.CONTRADICTION_STOPWORDS
+            }
+
+        claim_terms = extract_terms(claim)
+        evidence_terms = extract_terms(evidence)
+
+        if not claim_terms or not evidence_terms:
+            return False
+
+        overlapping_terms = claim_terms & evidence_terms
+
+        overlap_ratio = (
+            len(overlapping_terms) / len(claim_terms)
+        )
+
+        return (
+            bool(overlapping_terms)
+            and overlap_ratio >= cls.MIN_CONTENT_OVERLAP_RATIO
+        )
+
+    def evaluate(self, answer, source_map, source_documents):
+        """Evaluate and classify every cited answer claim."""
 
         claims = parse_claims(answer)
-
         evaluations = []
 
         for claim_data in claims:
-
             original_claim = claim_data["claim"]
             source_numbers = claim_data["source_numbers"]
 
-            atomic_claims = self.claim_decomposer.decompose(
-                original_claim
-            )
+            # A sentence without a citation cannot be verified against cited
+            # evidence. Report it explicitly (no LLM decomposition, no NLI)
+            # instead of dropping it or labelling it with a neighbour's source.
+            if claim_data.get("uncited") or not source_numbers:
+                evaluations.append({
+                    "claim": original_claim,
+                    "atomic_claims": [],
+                    "status": "uncited",
+                    "reason": (
+                        "The claim has no [Source N] citation, so it was "
+                        "not verified against evidence."
+                    ),
+                })
+                continue
 
             atomic_evaluations = []
 
-            for atomic_claim in atomic_claims:
+            claim_context = claim_data.get("context")
+            if claim_context:
+                atomic_claims = self.claim_decomposer.decompose(
+                    original_claim,
+                    context=claim_context,
+                )
+            else:
+                atomic_claims = self.claim_decomposer.decompose(
+                    original_claim
+                )
 
+            for atomic_claim in atomic_claims:
                 claim_evidence = []
 
                 for source_number in source_numbers:
-
                     if source_number not in source_map:
-
                         claim_evidence.append({
                             "source_number": source_number,
                             "label": "invalid",
                             "reason": "Source does not exist.",
                         })
-
                         continue
 
                     source_index = source_number - 1
 
-                    if source_index >= len(
-                        source_documents
+                    if (
+                        source_index < 0
+                        or source_index >= len(source_documents)
                     ):
-
                         claim_evidence.append({
                             "source_number": source_number,
                             "label": "invalid",
                             "reason": (
-                                "Source does not map to "
-                                "retrieved evidence."
+                                "Source does not map to retrieved evidence."
                             ),
                         })
-
                         continue
 
-                    evidence = source_documents[
-                        source_index
-                    ]["text"]
+                    evidence = source_documents[source_index]["text"]
 
-                    selected_evidence = (
-                        self.evidence_selector.select(
-                            claim=atomic_claim,
-                            evidence=evidence,
-                            top_k=2,
-                        )
+                    selected_evidence = self.evidence_selector.select(
+                        claim=atomic_claim,
+                        evidence=evidence,
+                        top_k=2,
                     )
 
                     if not selected_evidence:
-
                         claim_evidence.append({
                             "source_number": source_number,
                             "label": "unsupported",
                             "reason": (
-                                "No sufficiently relevant "
-                                "evidence was found."
+                                "No sufficiently relevant evidence was found."
                             ),
                         })
-
                         continue
 
                     source_results = []
 
                     for evidence_item in selected_evidence:
-
                         result = self.grounder.check_claim(
                             claim=atomic_claim,
                             evidence=evidence_item["text"],
                         )
 
+                        probabilities = result.get(
+                            "probabilities",
+                            {},
+                        )
+
                         source_results.append({
                             "label": result["label"],
-                            "probabilities": result[
-                                "probabilities"
-                            ],
+                            "raw_label": result.get("raw_label", result["label"]),
+                            "relation_guard": result.get("relation_guard", {}),
+                            "support_guard": result.get("support_guard", {}),
+                            "probabilities": probabilities,
                             "evidence": evidence_item["text"],
-                            "evidence_score": (
-                                evidence_item["score"]
-                            ),
+                            "evidence_score": evidence_item["score"],
                         })
 
-                    source_labels = [
-                        result["label"]
-                        for result in source_results
-                    ]
-
-                    has_entailment = (
-                        "entailment" in source_labels
+                    # Supporting evidence must pass its own NLI confidence
+                    # threshold. Relevance thresholds for contradictions
+                    # must not suppress valid supporting evidence.
+                    has_entailment = any(
+                        item["label"] == "entailment"
+                        and (
+                            item["probabilities"].get("entailment", 0.0)
+                            >= self.MIN_ENTAILMENT_PROBABILITY
+                            or item.get("support_guard", {}).get("applied", False)
+                        )
+                        for item in source_results
                     )
 
-                    has_contradiction = (
-                        "contradiction" in source_labels
+                    # A contradiction must satisfy all three conditions:
+                    # 1. The NLI model predicts contradiction.
+                    # 2. Contradiction confidence is sufficiently high.
+                    # 3. The evidence is relevant and shares meaningful
+                    #    content terms with the claim.
+                    #
+                    # Lexical overlap is a safeguard, not proof of
+                    # contradiction; it can also miss valid paraphrases.
+                    has_contradiction = any(
+                        item["label"] == "contradiction"
+                        and item["probabilities"].get(
+                            "contradiction",
+                            0.0,
+                        ) >= self.MIN_CONTRADICTION_PROBABILITY
+                        and item["evidence_score"]
+                        >= self.MIN_CONTRADICTION_EVIDENCE_SCORE
+                        and self._has_content_overlap(
+                            atomic_claim,
+                            item["evidence"],
+                        )
+                        for item in source_results
                     )
 
-                    if (
-                        has_entailment
-                        and has_contradiction
-                    ):
-                        source_label = "conflict"
-
-                    elif has_entailment:
+                    # If a source has sufficiently confident supporting
+                    # evidence, do not allow a separate NLI false positive
+                    # to override it. Record the conflict for diagnostics.
+                    if has_entailment:
                         source_label = "entailment"
-
                     elif has_contradiction:
                         source_label = "contradiction"
-
                     else:
                         source_label = "neutral"
 
                     claim_evidence.append({
                         "source_number": source_number,
                         "label": source_label,
+                        "conflict_detected": (
+                            has_entailment and has_contradiction
+                        ),
                         "evidence": source_results,
                     })
 
-                status = self._classify_claim(
-                    claim_evidence
-                )
+                status = self._classify_claim(claim_evidence)
 
                 atomic_evaluations.append({
                     "claim": atomic_claim,
@@ -192,16 +287,25 @@ class GroundingEvaluator:
 
     @staticmethod
     def _classify_claim(source_evaluations):
-        """Classify an atomic claim based on source evaluations."""
+        """Classify an atomic claim using its cited source evaluations.
+
+        Supporting evidence can neutralize an NLI false positive within the
+        same source (handled before this method). It must not hide a conflict
+        between two distinct cited sources: if one source supports the claim
+        and another strongly contradicts it, require repair or an explicit
+        source-by-source explanation instead of marking the claim grounded.
+        """
 
         labels = [
             source["label"]
             for source in source_evaluations
         ]
 
-        # Conflicting evidence must never be treated as grounded.
-        if "conflict" in labels:
-            return "unsupported"
+        # A cross-source disagreement is materially different from mixed NLI
+        # predictions for two passages inside one source. Do not silently pick
+        # the supporting source and suppress a separate source's contradiction.
+        if "entailment" in labels and "contradiction" in labels:
+            return "contradicted"
 
         if "entailment" in labels:
             return "grounded"
@@ -213,7 +317,7 @@ class GroundingEvaluator:
 
     @staticmethod
     def _classify_atomic_claims(atomic_evaluations):
-        """Aggregate atomic claim results into an overall status."""
+        """Aggregate the results of all atomic claims."""
 
         statuses = [
             evaluation["status"]
@@ -223,16 +327,10 @@ class GroundingEvaluator:
         if not statuses:
             return "unsupported"
 
-        if all(
-            status == "grounded"
-            for status in statuses
-        ):
+        if all(status == "grounded" for status in statuses):
             return "grounded"
 
-        if any(
-            status == "contradicted"
-            for status in statuses
-        ):
+        if any(status == "contradicted" for status in statuses):
             return "contradicted"
 
         return "unsupported"

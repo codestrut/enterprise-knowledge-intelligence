@@ -16,6 +16,11 @@ class RerankedRetriever:
 
         self.reranker = Reranker()
 
+    def add_documents(self, chunks):
+        """Add documents to the underlying hybrid retrieval indexes."""
+
+        self.hybrid_retriever.add_documents(chunks)
+
     def retrieve(
         self,
         query,
@@ -23,6 +28,12 @@ class RerankedRetriever:
         candidate_k=20,
     ):
         """Retrieve hybrid candidates and rerank them."""
+
+        if top_k <= 0:
+            raise ValueError("top_k must be greater than zero.")
+
+        if candidate_k <= 0:
+            raise ValueError("candidate_k must be greater than zero.")
 
         candidates = self.hybrid_retriever.retrieve(
             query,

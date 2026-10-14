@@ -1,345 +1,330 @@
+
+import pytest
+
 from src.generation.grounding_evaluator import GroundingEvaluator
 
 
 class MockClaimDecomposer:
-    """Mock claim decomposer for deterministic tests."""
-
-    def __init__(self, decomposed_claims):
-        self.decomposed_claims = decomposed_claims
-
-    def decompose(self, claim):
-        return self.decomposed_claims
+    def decompose(self, claim, context=None):
+        return [claim]
 
 
 class MockEvidenceSelector:
-    """Mock evidence selector for deterministic tests."""
+    def __init__(self, score=0.9, evidence_text=None):
+        self.score = score
+        self.evidence_text = evidence_text
 
     def select(self, claim, evidence, top_k=2):
         if not claim or not evidence:
             return []
 
+        selected_text = self.evidence_text or evidence
+
         return [
             {
-                "text": evidence,
-                "score": 0.9,
+                "text": selected_text,
+                "score": self.score,
+                "semantic_score": self.score,
+                "lexical_score": self.score,
             }
         ]
 
 
 class MockSemanticGrounder:
-    """Mock semantic grounder for deterministic tests."""
-
-    def __init__(self, label):
+    def __init__(
+        self,
+        label,
+        probabilities=None,
+        labels_by_evidence=None,
+    ):
         self.label = label
+        self.probabilities = probabilities
+        self.labels_by_evidence = labels_by_evidence or {}
 
     def check_claim(self, claim, evidence):
+        label = self.labels_by_evidence.get(evidence, self.label)
+
+        default_probabilities = {
+            "contradiction": 0.01,
+            "entailment": 0.01,
+            "neutral": 0.98,
+        }
+        default_probabilities[label] = 0.98
+
+        probabilities = (
+            self.probabilities
+            if self.probabilities is not None
+            else default_probabilities
+        )
+
         return {
-            "label": self.label,
-            "probabilities": {
-                "entailment": 0.99 if self.label == "entailment" else 0.01,
-                "contradiction": 0.99 if self.label == "contradiction" else 0.01,
-                "neutral": 0.99 if self.label == "neutral" else 0.01,
-            },
+            "label": label,
+            "probabilities": probabilities,
         }
 
 
-source_map = {
+SOURCE_MAP = {
     1: {
-        "source": "data/raw/nist_csf_2.0.pdf",
-        "page": 11,
-        "chunk_id": 38,
-    },
-    2: {
-        "source": "data/raw/nist_csf_2.0.pdf",
-        "page": 31,
-        "chunk_id": 111,
-    },
+        "source": "test.pdf",
+        "page": 1,
+        "chunk_id": 1,
+    }
 }
 
 
-source_documents = [
-    {
-        "text": (
-            "An Organizational Profile describes an organization's "
-            "current and/or target cybersecurity posture."
+def make_evaluator(
+    *,
+    nli_label="neutral",
+    evidence_score=0.9,
+    evidence_text=None,
+    probabilities=None,
+    labels_by_evidence=None,
+):
+    return GroundingEvaluator(
+        evidence_selector=MockEvidenceSelector(
+            score=evidence_score,
+            evidence_text=evidence_text,
         ),
-        "metadata": {
-            "page": 11,
-            "chunk_id": 38,
-        },
-    },
-    {
-        "text": (
-            "A Target Profile describes the desired cybersecurity "
-            "outcomes for an organization."
+        semantic_grounder=MockSemanticGrounder(
+            nli_label,
+            probabilities=probabilities,
+            labels_by_evidence=labels_by_evidence,
         ),
-        "metadata": {
-            "page": 31,
-            "chunk_id": 111,
-        },
-    },
-]
+        claim_decomposer=MockClaimDecomposer(),
+    )
 
 
-print("=" * 80)
-print("TEST 1 — SUPPORTED ATOMIC CLAIM")
-print("=" * 80)
+def evaluate_claim(evaluator, claim, evidence):
+    answer = f"{claim} [Source 1]"
 
-answer = (
-    "An Organizational Profile describes an organization's "
-    "current cybersecurity posture. [Source 1]"
-)
+    source_documents = [
+        {
+            "text": evidence,
+            "metadata": {
+                "page": 1,
+                "chunk_id": 1,
+            },
+        }
+    ]
 
-evaluator = GroundingEvaluator(
-    evidence_selector=MockEvidenceSelector(),
-    semantic_grounder=MockSemanticGrounder("entailment"),
-    claim_decomposer=MockClaimDecomposer([
-        (
-            "An Organizational Profile describes an organization's "
-            "current cybersecurity posture."
-        )
-    ]),
-)
-
-result = evaluator.evaluate(
-    answer=answer,
-    source_map=source_map,
-    source_documents=source_documents,
-)
-
-print("\nRESULT:")
-print(result)
-
-assert result[0]["status"] == "grounded"
-assert len(result[0]["atomic_claims"]) == 1
-assert result[0]["atomic_claims"][0]["status"] == "grounded"
+    return evaluator.evaluate(
+        answer=answer,
+        source_map=SOURCE_MAP,
+        source_documents=source_documents,
+    )
 
 
-print("\n" + "=" * 80)
-print("TEST 2 — CONTRADICTED ATOMIC CLAIM")
-print("=" * 80)
+def test_supported_claim_is_grounded():
+    claim = (
+        "An Organizational Profile describes an organization's "
+        "current cybersecurity posture."
+    )
+    evidence = (
+        "An Organizational Profile describes an organization's "
+        "current and target cybersecurity posture."
+    )
 
-answer = (
-    "An Organizational Profile manages an organization's "
-    "financial budget. [Source 1]"
-)
+    evaluator = make_evaluator(nli_label="entailment")
+    result = evaluate_claim(evaluator, claim, evidence)
 
-evaluator = GroundingEvaluator(
-    evidence_selector=MockEvidenceSelector(),
-    semantic_grounder=MockSemanticGrounder("contradiction"),
-    claim_decomposer=MockClaimDecomposer([
-        (
-            "An Organizational Profile manages an organization's "
-            "financial budget."
-        )
-    ]),
-)
-
-result = evaluator.evaluate(
-    answer=answer,
-    source_map=source_map,
-    source_documents=source_documents,
-)
-
-print("\nRESULT:")
-print(result)
-
-assert result[0]["status"] == "contradicted"
-assert result[0]["atomic_claims"][0]["status"] == "contradicted"
+    assert result[0]["status"] == "grounded"
+    assert result[0]["atomic_claims"][0]["status"] == "grounded"
 
 
-print("\n" + "=" * 80)
-print("TEST 3 — UNSUPPORTED ATOMIC CLAIM")
-print("=" * 80)
+def test_relevant_contradiction_is_detected():
+    claim = "Tier 4 is Partial."
+    evidence = "Tier 4 is Adaptive."
 
-answer = (
-    "The organization operates offices in five countries. [Source 1]"
-)
+    evaluator = make_evaluator(nli_label="contradiction")
+    result = evaluate_claim(evaluator, claim, evidence)
 
-evaluator = GroundingEvaluator(
-    evidence_selector=MockEvidenceSelector(),
-    semantic_grounder=MockSemanticGrounder("neutral"),
-    claim_decomposer=MockClaimDecomposer([
-        "The organization operates offices in five countries."
-    ]),
-)
-
-result = evaluator.evaluate(
-    answer=answer,
-    source_map=source_map,
-    source_documents=source_documents,
-)
-
-print("\nRESULT:")
-print(result)
-
-assert result[0]["status"] == "unsupported"
-assert result[0]["atomic_claims"][0]["status"] == "unsupported"
+    assert result[0]["status"] == "contradicted"
+    assert result[0]["atomic_claims"][0]["status"] == "contradicted"
 
 
-print("\n" + "=" * 80)
-print("TEST 4 — COMPOUND CLAIM WITH ALL ATOMIC CLAIMS GROUNDED")
-print("=" * 80)
+def test_irrelevant_low_score_evidence_is_not_a_contradiction():
+    claim = "Tier 4 is Adaptive."
+    evidence = (
+        "Tier 1 is Partial. Its cybersecurity risk strategy "
+        "is managed in an ad hoc manner."
+    )
 
-answer = (
-    "An Organizational Profile describes an organization's "
-    "current and/or target cybersecurity posture, and is used "
-    "to understand, tailor, assess, prioritize, and communicate "
-    "the Core's outcomes. [Source 1]"
-)
+    evaluator = make_evaluator(
+        nli_label="contradiction",
+        evidence_score=0.343,
+        evidence_text=evidence,
+    )
+    result = evaluate_claim(evaluator, claim, evidence)
 
-evaluator = GroundingEvaluator(
-    evidence_selector=MockEvidenceSelector(),
-    semantic_grounder=MockSemanticGrounder("entailment"),
-    claim_decomposer=MockClaimDecomposer([
-        (
-            "An Organizational Profile describes an organization's "
-            "current and/or target cybersecurity posture."
-        ),
-        (
-            "An Organizational Profile is used to understand, "
-            "tailor, assess, prioritize, and communicate the "
-            "Core's outcomes."
-        ),
-    ]),
-)
-
-result = evaluator.evaluate(
-    answer=answer,
-    source_map=source_map,
-    source_documents=source_documents,
-)
-
-print("\nRESULT:")
-print(result)
-
-assert result[0]["status"] == "grounded"
-assert len(result[0]["atomic_claims"]) == 2
-
-for atomic_claim in result[0]["atomic_claims"]:
-    assert atomic_claim["status"] == "grounded"
+    assert result[0]["status"] == "unsupported"
+    assert result[0]["atomic_claims"][0]["status"] == "unsupported"
 
 
-print("\n" + "=" * 80)
-print("TEST 5 — COMPOUND CLAIM WITH ONE UNSUPPORTED ATOMIC CLAIM")
-print("=" * 80)
+def test_neutral_evidence_leaves_claim_unsupported():
+    claim = "The organization operates offices in five countries."
+    evidence = "The organization uses a cybersecurity risk framework."
 
-answer = (
-    "An Organizational Profile describes an organization's "
-    "current cybersecurity posture and is used to determine "
-    "the organization's annual financial budget. [Source 1]"
-)
+    evaluator = make_evaluator(nli_label="neutral")
+    result = evaluate_claim(evaluator, claim, evidence)
 
-evaluator = GroundingEvaluator(
-    evidence_selector=MockEvidenceSelector(),
-    semantic_grounder=MockSemanticGrounder("neutral"),
-    claim_decomposer=MockClaimDecomposer([
-        (
-            "An Organizational Profile describes an organization's "
-            "current cybersecurity posture."
-        ),
-        (
-            "An Organizational Profile is used to determine "
-            "the organization's annual financial budget."
-        ),
-    ]),
-)
+    assert result[0]["status"] == "unsupported"
+    assert result[0]["atomic_claims"][0]["status"] == "unsupported"
 
-# First atomic claim should be grounded.
-class MixedSemanticGrounder:
-    """Return different grounding results for different claims."""
 
-    def check_claim(self, claim, evidence):
-        if "cybersecurity posture" in claim:
+def test_invalid_citation_is_unsupported():
+    claim = "Tier 4 is Adaptive."
+    answer = f"{claim} [Source 99]"
+
+    evaluator = make_evaluator(nli_label="entailment")
+
+    result = evaluator.evaluate(
+        answer=answer,
+        source_map=SOURCE_MAP,
+        source_documents=[
+            {
+                "text": "Tier 4 is Adaptive.",
+                "metadata": {"page": 1, "chunk_id": 1},
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "unsupported"
+    assert result[0]["atomic_claims"][0]["sources"][0]["label"] == "invalid"
+
+
+def test_entailment_is_not_discarded_by_contradiction_threshold():
+    """Strong entailment remains valid even below the contradiction cutoff."""
+    claim = "Adequate resources are allocated."
+    evidence = "Adequate resources are allocated commensurate with risk."
+
+    evaluator = make_evaluator(
+        nli_label="entailment",
+        evidence_score=0.357,
+    )
+    result = evaluate_claim(evaluator, claim, evidence)
+
+    assert result[0]["status"] == "grounded"
+    assert result[0]["atomic_claims"][0]["status"] == "grounded"
+
+
+def test_supporting_evidence_wins_over_false_contradiction():
+    """A false contradiction must not override strong supporting evidence."""
+    claim = "An Organizational Profile describes cybersecurity posture."
+
+    supporting_evidence = (
+        "An Organizational Profile describes current cybersecurity posture."
+    )
+    contradictory_evidence = (
+        "Organizational Profiles are used to assess cybersecurity outcomes."
+    )
+
+    class TwoEvidenceSelector:
+        def select(self, claim, evidence, top_k=2):
+            return [
+                {
+                    "text": supporting_evidence,
+                    "score": 0.60,
+                    "semantic_score": 0.60,
+                    "lexical_score": 0.60,
+                },
+                {
+                    "text": contradictory_evidence,
+                    "score": 0.55,
+                    "semantic_score": 0.55,
+                    "lexical_score": 0.55,
+                },
+            ]
+
+    class MixedGrounder:
+        def check_claim(self, claim, evidence):
+            if evidence == supporting_evidence:
+                return {
+                    "label": "entailment",
+                    "probabilities": {
+                        "contradiction": 0.001,
+                        "entailment": 0.98,
+                        "neutral": 0.019,
+                    },
+                }
+
             return {
-                "label": "entailment",
+                "label": "contradiction",
                 "probabilities": {
-                    "entailment": 0.99,
-                    "contradiction": 0.005,
-                    "neutral": 0.005,
+                    "contradiction": 0.99,
+                    "entailment": 0.001,
+                    "neutral": 0.009,
                 },
             }
 
-        return {
-            "label": "neutral",
-            "probabilities": {
-                "entailment": 0.005,
-                "contradiction": 0.005,
-                "neutral": 0.99,
-            },
-        }
+    evaluator = GroundingEvaluator(
+        evidence_selector=TwoEvidenceSelector(),
+        semantic_grounder=MixedGrounder(),
+        claim_decomposer=MockClaimDecomposer(),
+    )
+
+    result = evaluate_claim(evaluator, claim, supporting_evidence)
+
+    atomic = result[0]["atomic_claims"][0]
+
+    assert atomic["status"] == "grounded"
+    assert atomic["sources"][0]["label"] == "entailment"
+    assert atomic["sources"][0]["conflict_detected"] is True
 
 
-evaluator = GroundingEvaluator(
-    evidence_selector=MockEvidenceSelector(),
-    semantic_grounder=MixedSemanticGrounder(),
-    claim_decomposer=MockClaimDecomposer([
+def test_unrelated_high_score_evidence_is_not_a_contradiction():
+    """High similarity alone must not prove a claim is contradicted."""
+    claim = "The system uses biometric authentication."
+    evidence = "The system uses role-based access control."
+
+    evaluator = make_evaluator(
+        nli_label="contradiction",
+        evidence_score=0.55,
+        evidence_text=evidence,
+    )
+
+    result = evaluate_claim(evaluator, claim, evidence)
+
+    assert result[0]["status"] == "unsupported"
+    assert result[0]["atomic_claims"][0]["status"] == "unsupported"
+
+
+def test_anaphoric_claim_context_is_forwarded_to_decomposer():
+    class ContextRecordingDecomposer:
+        def __init__(self):
+            self.calls = []
+
+        def decompose(self, claim, context=None):
+            self.calls.append((claim, context))
+            return [claim]
+
+    decomposer = ContextRecordingDecomposer()
+    evaluator = GroundingEvaluator(
+        evidence_selector=MockEvidenceSelector(),
+        semantic_grounder=MockSemanticGrounder("neutral"),
+        claim_decomposer=decomposer,
+    )
+    answer = (
+        "Cybersecurity supply chain risk management (C-SCRM) is a systematic process. "
+        "It emphasizes coordinated supplier risk management. [Source 1]"
+    )
+    evaluator.evaluate(
+        answer=answer,
+        source_map=SOURCE_MAP,
+        source_documents=[{
+            "text": (
+                "C-SCRM is a systematic process and coordinates supplier risk management."
+            ),
+            "metadata": {"page": 1, "chunk_id": 1},
+        }],
+    )
+
+    assert decomposer.calls == [
         (
-            "An Organizational Profile describes an organization's "
-            "current cybersecurity posture."
+            "Cybersecurity supply chain risk management (C-SCRM) is a systematic process.",
+            None,
         ),
         (
-            "An Organizational Profile is used to determine "
-            "the organization's annual financial budget."
+            "It emphasizes coordinated supplier risk management.",
+            "Cybersecurity supply chain risk management (C-SCRM) is a systematic process.",
         ),
-    ]),
-)
-
-result = evaluator.evaluate(
-    answer=answer,
-    source_map=source_map,
-    source_documents=source_documents,
-)
-
-print("\nRESULT:")
-print(result)
-
-assert result[0]["atomic_claims"][0]["status"] == "grounded"
-assert result[0]["atomic_claims"][1]["status"] == "unsupported"
-
-# Critical conservative rule:
-# one unsupported atomic claim means the overall compound claim
-# must NOT be considered grounded.
-assert result[0]["status"] == "unsupported"
-
-
-print("\n" + "=" * 80)
-print("TEST 6 — INVALID CITATION")
-print("=" * 80)
-
-answer = (
-    "An Organizational Profile describes an organization's "
-    "current cybersecurity posture. [Source 99]"
-)
-
-evaluator = GroundingEvaluator(
-    evidence_selector=MockEvidenceSelector(),
-    semantic_grounder=MockSemanticGrounder("entailment"),
-    claim_decomposer=MockClaimDecomposer([
-        (
-            "An Organizational Profile describes an organization's "
-            "current cybersecurity posture."
-        )
-    ]),
-)
-
-result = evaluator.evaluate(
-    answer=answer,
-    source_map=source_map,
-    source_documents=source_documents,
-)
-
-print("\nRESULT:")
-print(result)
-
-assert result[0]["status"] == "unsupported"
-
-assert (
-    result[0]["atomic_claims"][0]["sources"][0]["label"]
-    == "invalid"
-)
-
-
-print("\n" + "=" * 80)
-print("ALL GROUNDING EVALUATOR TESTS PASSED")
-print("=" * 80)
+    ]

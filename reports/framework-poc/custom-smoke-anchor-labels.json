@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "experiment": "ekip-llamaindex-ragas-poc-v1",
+  "timestamp_utc": "2026-10-13T13:39:28.575769+00:00",
+  "backend": "custom",
+  "document": "data/raw/nist_csf_2.0.pdf",
+  "query_count": 4,
+  "with_ragas": false,
+  "ragas_evaluator_model": null,
+  "metrics": {
+    "answer_success_rate": 1.0,
+    "refusal_accuracy": null,
+    "citation_validity_rate": 1.0,
+    "grounded_claim_rate": 0.75,
+    "unsupported_claim_rate": 0.25,
+    "contradicted_claim_rate": 0.0,
+    "uncited_claim_rate": 0.0,
+    "uncited_claims": 0,
+    "raw_nli_contradictions": 0,
+    "relation_guard_downgrades": 0,
+    "grounded_answer_rate": 0.5,
+    "mean_latency_seconds": 23.107525,
+    "retrieval_cases_scored": 4,
+    "hit_at_5": 1,
+    "recall_at_5": 1.0,
+    "mrr": 1.0,
+    "ragas_faithfulness_mean": null,
+    "ragas_faithfulness_scored_answers": 0,
+    "ragas_judge_errors": 0
+  },
+  "queries": [
+    {
+      "id": 1,
+      "query": "What is an Organizational Profile?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 24.9682,
+      "citation_valid": true,
+      "citation_count": 1,
+      "total_claims": 2,
+      "grounded_claims": 0,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        36,
+        39,
+        38,
+        106,
+        41
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "unsupported",
+        "unsupported"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "A CSF Organizational Profile describes an organization’s current and/or target cybersecurity posture in terms of the Core’s outcomes",
+          "Organizational Profiles are used to understand, tailor, assess, prioritize, and communicate the Core’s outcomes",
+          "CSF Organizational Profile A mechanism for describing an organization’s current and/or target cybersecurity posture in terms of the CSF Core’s outcomes",
+          "Every Organizational Profile includes one or both of the following"
+        ],
+        "mapped_relevant_chunk_ids": [
+          36,
+          106
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 2,
+      "query": "What does NIST say about cybersecurity roles and responsibilities?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 35.961,
+      "citation_valid": true,
+      "citation_count": 7,
+      "total_claims": 7,
+      "grounded_claims": 7,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        73,
+        76,
+        85,
+        29,
+        30
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "Roles, Responsibilities, and Authorities (GV.RR): Cybersecurity roles, responsibilities, and authorities to foster accountability, performance assessment, and continuous improvement are established and communicated",
+          "GV.RR-01: Organizational leadership is responsible and accountable for cybersecurity risk",
+          "GV.RR-02: Roles, responsibilities, and authorities related to cybersecurity risk management are established, communicated, understood, and enforced",
+          "GV.SC-02: Cybersecurity roles and responsibilities for suppliers, customers, and partners are established, communicated, and coordinated internally and externally"
+        ],
+        "mapped_relevant_chunk_ids": [
+          73,
+          76
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 3,
+      "query": "What is GV.RR-01?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 10.2412,
+      "citation_valid": true,
+      "citation_count": 1,
+      "total_claims": 1,
+      "grounded_claims": 1,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        73,
+        74,
+        75,
+        72,
+        71
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "GV.RR-01: Organizational leadership is responsible and accountable for cybersecurity risk and fosters a culture that is risk-aware, ethical, and continually improving"
+        ],
+        "mapped_relevant_chunk_ids": [
+          73
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 4,
+      "query": "How can an organization prioritize cybersecurity activities?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 21.2597,
+      "citation_valid": true,
+      "citation_count": 2,
+      "total_claims": 2,
+      "grounded_claims": 1,
+      "unsupported_claims": 1,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        49,
+        98,
+        24,
+        50,
+        29
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "unsupported"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "Prioritize: Identify, organize, and prioritize actions for managing cybersecurity risks that align with the organization’s mission, legal and regulatory requirements, and risk management and governance expectations",
+          "With an understanding of stakeholder expectations and risk appetite and tolerance (as outlined in GOVERN), an organization can prioritize cybersecurity activities to make informed decisions about cybersecurity expenditures and actions"
+        ],
+        "mapped_relevant_chunk_ids": [
+          24,
+          49
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    }
+  ],
+  "notes": [
+    "Existing EKIP citation, refusal, and grounding gates remain the hard safety checks.",
+    "Ragas faithfulness is an independent judge score and must not be treated as ground truth by itself.",
+    "Raw answers and retrieved context are omitted unless --include-text is explicitly supplied.",
+    "Retrieval metrics exclude cases whose labelled relevant chunk IDs do not map to the current corpus.",
+    "LlamaIndex reranker scores are not directly comparable to EKIP RRF scores; compare ranking metrics instead."
+  ]
+}

@@ -1,0 +1,6 @@
+# Optional, separately installed Ragas evaluator dependencies.
+# Ragas 0.4.3 imports a Vertex AI adapter from the old langchain-community path;
+# pin community to 0.4.1 for this POC rather than allowing 0.4.2+ to resolve.
+# Install only when running the optional --with-ragas evaluation.
+ragas==0.4.3
+langchain-community==0.4.1

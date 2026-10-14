@@ -1,0 +1,585 @@
+{
+  "schema_version": 1,
+  "experiment": "ekip-llamaindex-ragas-poc-v1",
+  "timestamp_utc": "2026-10-13T17:32:56.579527+00:00",
+  "backend": "llamaindex",
+  "document": "data/raw/nist_csf_2.0.pdf",
+  "query_count": 12,
+  "with_ragas": false,
+  "ragas_evaluator_model": null,
+  "metrics": {
+    "answer_success_rate": 1.0,
+    "refusal_accuracy": 1.0,
+    "citation_validity_rate": 1.0,
+    "grounded_claim_rate": 0.6666666666666666,
+    "unsupported_claim_rate": 0.3333333333333333,
+    "contradicted_claim_rate": 0.0,
+    "uncited_claim_rate": 0.0,
+    "uncited_claims": 0,
+    "raw_nli_contradictions": 7,
+    "relation_guard_downgrades": 7,
+    "grounded_answer_rate": 0.375,
+    "mean_latency_seconds": 21.030741666666668,
+    "retrieval_cases_scored": 8,
+    "hit_at_5": 1,
+    "recall_at_5": 0.9375,
+    "mrr": 0.8541666666666666,
+    "ragas_faithfulness_mean": null,
+    "ragas_faithfulness_scored_answers": 0,
+    "ragas_judge_errors": 0
+  },
+  "queries": [
+    {
+      "id": 1,
+      "query": "What is an Organizational Profile?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 31.6043,
+      "citation_valid": true,
+      "citation_count": 2,
+      "total_claims": 2,
+      "grounded_claims": 2,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 1,
+      "relation_guard_downgrades": 1,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        39,
+        36,
+        52,
+        106,
+        41
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "grounded"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "A CSF Organizational Profile describes an organization’s current and/or target cybersecurity posture in terms of the Core’s outcomes",
+          "Organizational Profiles are used to understand, tailor, assess, prioritize, and communicate the Core’s outcomes",
+          "CSF Organizational Profile A mechanism for describing an organization’s current and/or target cybersecurity posture in terms of the CSF Core’s outcomes",
+          "Every Organizational Profile includes one or both of the following"
+        ],
+        "mapped_relevant_chunk_ids": [
+          36,
+          106
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 0.5,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 2,
+      "query": "What does NIST say about cybersecurity roles and responsibilities?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 68.2759,
+      "citation_valid": true,
+      "citation_count": 9,
+      "total_claims": 9,
+      "grounded_claims": 9,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        73,
+        76,
+        29,
+        74,
+        53
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded",
+        "grounded"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "Roles, Responsibilities, and Authorities (GV.RR): Cybersecurity roles, responsibilities, and authorities to foster accountability, performance assessment, and continuous improvement are established and communicated",
+          "GV.RR-01: Organizational leadership is responsible and accountable for cybersecurity risk",
+          "GV.RR-02: Roles, responsibilities, and authorities related to cybersecurity risk management are established, communicated, understood, and enforced",
+          "GV.SC-02: Cybersecurity roles and responsibilities for suppliers, customers, and partners are established, communicated, and coordinated internally and externally"
+        ],
+        "mapped_relevant_chunk_ids": [
+          73,
+          76
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 3,
+      "query": "What is GV.RR-01?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 20.1381,
+      "citation_valid": true,
+      "citation_count": 1,
+      "total_claims": 1,
+      "grounded_claims": 1,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        73,
+        74,
+        75,
+        71,
+        72
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "GV.RR-01: Organizational leadership is responsible and accountable for cybersecurity risk and fosters a culture that is risk-aware, ethical, and continually improving"
+        ],
+        "mapped_relevant_chunk_ids": [
+          73
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 4,
+      "query": "How can an organization prioritize cybersecurity activities?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 40.2863,
+      "citation_valid": true,
+      "citation_count": 4,
+      "total_claims": 3,
+      "grounded_claims": 1,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 1,
+      "relation_guard_downgrades": 1,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        49,
+        98,
+        24,
+        50,
+        29
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "unsupported",
+        "unsupported"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "Prioritize: Identify, organize, and prioritize actions for managing cybersecurity risks that align with the organization’s mission, legal and regulatory requirements, and risk management and governance expectations",
+          "With an understanding of stakeholder expectations and risk appetite and tolerance (as outlined in GOVERN), an organization can prioritize cybersecurity activities to make informed decisions about cybersecurity expenditures and actions"
+        ],
+        "mapped_relevant_chunk_ids": [
+          24,
+          49
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 5,
+      "query": "What are the cybersecurity risk tiers?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 31.0892,
+      "citation_valid": true,
+      "citation_count": 6,
+      "total_claims": 4,
+      "grounded_claims": 2,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 3,
+      "relation_guard_downgrades": 3,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        42,
+        97,
+        101,
+        43,
+        98
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "unsupported",
+        "grounded",
+        "unsupported",
+        "grounded"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "The Tiers, as shown in Fig. 4 and notionally illustrated in Appendix B, reflect an organization’s practices for managing cybersecurity risk as Partial (Tier 1), Risk Informed (Tier 2), Repeatable (Tier 3), and Adaptive (Tier 4)",
+          "The Tiers characterize the rigor of an organization’s cybersecurity risk governance practices (GOVERN) and cybersecurity risk management practices (IDENTIFY, PROTECT, DETECT, RESPOND, and RECOVER)",
+          "The prioritization of cybersecurity activities and protection needs is directly informed by organizational risk objectives, the threat environment, or business/mission requirements"
+        ],
+        "mapped_relevant_chunk_ids": [
+          42,
+          97,
+          98
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 6,
+      "query": "What is cybersecurity supply chain risk management?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 11.5953,
+      "citation_valid": true,
+      "citation_count": 2,
+      "total_claims": 1,
+      "grounded_claims": 0,
+      "unsupported_claims": 1,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        76,
+        78,
+        75,
+        29,
+        63
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "unsupported"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "Cyber supply chain risk management processes are identified, established, managed, monitored, and improved by organizational stakeholders",
+          "Cybersecurity SCRM (C-SCRM) is a systematic process for managing exposure to cybersecurity risk throughout supply chains and developing appropriate response strategies, policies, processes, and procedures",
+          "GV.SC-03: Cybersecurity supply chain risk management is integrated into cybersecurity and enterprise risk management, risk assessment, and improvement processes",
+          "GV.SC-04: Suppliers are known and prioritized by criticality"
+        ],
+        "mapped_relevant_chunk_ids": [
+          75,
+          63,
+          76
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 7,
+      "query": "How are cybersecurity risks integrated into enterprise risk management?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 22.7215,
+      "citation_valid": true,
+      "citation_count": 3,
+      "total_claims": 2,
+      "grounded_claims": 0,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 2,
+      "relation_guard_downgrades": 2,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        59,
+        78,
+        57,
+        66,
+        76
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "unsupported",
+        "unsupported"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "Governance activities are critical for incorporating cybersecurity into an organization’s broader enterprise risk management (ERM) strategy",
+          "The CSF helps organizations to translate their terminology for cybersecurity and cybersecurity risk management into general risk management language that executives will understand",
+          "GV.RM-03: Cybersecurity risk management activities and outcomes are included in enterprise risk management processes",
+          "GV.SC-03: Cybersecurity supply chain risk management is integrated into cybersecurity and enterprise risk management, risk assessment, and improvement processes"
+        ],
+        "mapped_relevant_chunk_ids": [
+          28,
+          57,
+          72,
+          76
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 0.5,
+        "mrr": 0.3333333333333333,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 8,
+      "query": "How are access permissions and authorizations managed?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 26.0856,
+      "citation_valid": true,
+      "citation_count": 2,
+      "total_claims": 2,
+      "grounded_claims": 1,
+      "unsupported_claims": 1,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        85,
+        83,
+        30,
+        88,
+        87
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "unsupported"
+      ],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "PR.AA-05: Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed, and incorporate the principles of least privilege and separation of duties"
+        ],
+        "mapped_relevant_chunk_ids": [
+          85
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 9,
+      "query": "What does the NIST CSF 2.0 say about implementation costs?",
+      "answerable": false,
+      "answered": false,
+      "refused": true,
+      "latency_seconds": 0.0901,
+      "citation_valid": true,
+      "citation_count": 0,
+      "total_claims": 0,
+      "grounded_claims": 0,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        22,
+        44,
+        68,
+        15,
+        1
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [],
+      "retrieval": {
+        "gold_evidence_anchors": [],
+        "mapped_relevant_chunk_ids": [],
+        "unmapped_relevant_evidence": [],
+        "scoreable": false,
+        "hit_at_5": null,
+        "recall_at_5": null,
+        "mrr": null,
+        "note": "Excluded: one or more gold evidence anchors did not map to the current corpus."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 10,
+      "query": "Which encryption algorithm does the NIST CSF 2.0 require organizations to use?",
+      "answerable": false,
+      "answered": false,
+      "refused": true,
+      "latency_seconds": 0.3024,
+      "citation_valid": true,
+      "citation_count": 0,
+      "total_claims": 0,
+      "grounded_claims": 0,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        1,
+        15,
+        49,
+        45,
+        18
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [],
+      "retrieval": {
+        "gold_evidence_anchors": [],
+        "mapped_relevant_chunk_ids": [],
+        "unmapped_relevant_evidence": [],
+        "scoreable": false,
+        "hit_at_5": null,
+        "recall_at_5": null,
+        "mrr": null,
+        "note": "Excluded: one or more gold evidence anchors did not map to the current corpus."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 11,
+      "query": "What is the default password for a Cisco firewall?",
+      "answerable": false,
+      "answered": false,
+      "refused": true,
+      "latency_seconds": 0.0851,
+      "citation_valid": true,
+      "citation_count": 0,
+      "total_claims": 0,
+      "grounded_claims": 0,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        84,
+        83,
+        60,
+        0,
+        30
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [],
+      "retrieval": {
+        "gold_evidence_anchors": [],
+        "mapped_relevant_chunk_ids": [],
+        "unmapped_relevant_evidence": [],
+        "scoreable": false,
+        "hit_at_5": null,
+        "recall_at_5": null,
+        "mrr": null,
+        "note": "Excluded: one or more gold evidence anchors did not map to the current corpus."
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 12,
+      "query": "What is the latest Windows security vulnerability?",
+      "answerable": false,
+      "answered": false,
+      "refused": true,
+      "latency_seconds": 0.0951,
+      "citation_valid": true,
+      "citation_count": 0,
+      "total_claims": 0,
+      "grounded_claims": 0,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        82,
+        81,
+        31,
+        48,
+        18
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [],
+      "retrieval": {
+        "gold_evidence_anchors": [],
+        "mapped_relevant_chunk_ids": [],
+        "unmapped_relevant_evidence": [],
+        "scoreable": false,
+        "hit_at_5": null,
+        "recall_at_5": null,
+        "mrr": null,
+        "note": "Excluded: one or more gold evidence anchors did not map to the current corpus."
+      },
+      "ragas_faithfulness": null
+    }
+  ],
+  "notes": [
+    "Existing EKIP citation, refusal, and grounding gates remain the hard safety checks.",
+    "Ragas faithfulness is an independent judge score and must not be treated as ground truth by itself.",
+    "Raw answers and retrieved context are omitted unless --include-text is explicitly supplied.",
+    "Retrieval metrics exclude cases whose labelled relevant chunk IDs do not map to the current corpus.",
+    "LlamaIndex reranker scores are not directly comparable to EKIP RRF scores; compare ranking metrics instead."
+  ]
+}

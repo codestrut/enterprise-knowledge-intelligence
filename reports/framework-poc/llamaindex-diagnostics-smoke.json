@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "experiment": "ekip-llamaindex-ragas-poc-v1",
+  "timestamp_utc": "2026-10-13T20:31:13.859433+00:00",
+  "backend": "llamaindex",
+  "document": "data/raw/nist_csf_2.0.pdf",
+  "query_count": 1,
+  "with_ragas": false,
+  "ragas_evaluator_model": null,
+  "metrics": {
+    "answer_success_rate": 1.0,
+    "refusal_accuracy": null,
+    "citation_validity_rate": 1.0,
+    "grounded_claim_rate": 1.0,
+    "unsupported_claim_rate": 0.0,
+    "contradicted_claim_rate": 0.0,
+    "uncited_claim_rate": 0.0,
+    "uncited_claims": 0,
+    "raw_nli_contradictions": 0,
+    "relation_guard_downgrades": 0,
+    "grounded_answer_rate": 1.0,
+    "mean_latency_seconds": 40.2261,
+    "retrieval_cases_scored": 1,
+    "hit_at_5": 1,
+    "recall_at_5": 1.0,
+    "mrr": 0.5,
+    "ragas_faithfulness_mean": null,
+    "ragas_faithfulness_scored_answers": 0,
+    "ragas_judge_errors": 0
+  },
+  "queries": [
+    {
+      "id": 1,
+      "query": "What is an Organizational Profile?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 40.2261,
+      "citation_valid": true,
+      "citation_count": 2,
+      "total_claims": 2,
+      "grounded_claims": 2,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "uncited_claims": 0,
+      "raw_nli_contradictions": 0,
+      "relation_guard_downgrades": 0,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        39,
+        36,
+        52,
+        106,
+        41
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "grounded"
+      ],
+      "grounding_diagnostics": [],
+      "retrieval": {
+        "gold_evidence_anchors": [
+          "A CSF Organizational Profile describes an organization’s current and/or target cybersecurity posture in terms of the Core’s outcomes",
+          "Organizational Profiles are used to understand, tailor, assess, prioritize, and communicate the Core’s outcomes",
+          "CSF Organizational Profile A mechanism for describing an organization’s current and/or target cybersecurity posture in terms of the CSF Core’s outcomes",
+          "Every Organizational Profile includes one or both of the following"
+        ],
+        "mapped_relevant_chunk_ids": [
+          36,
+          106
+        ],
+        "unmapped_relevant_evidence": [],
+        "scoreable": true,
+        "hit_at_5": 1,
+        "recall_at_5": 1.0,
+        "mrr": 0.5,
+        "note": "Scored using source-text anchors resolved against the current chunking."
+      },
+      "ragas_faithfulness": null
+    }
+  ],
+  "notes": [
+    "Existing EKIP citation, refusal, and grounding gates remain the hard safety checks.",
+    "Ragas faithfulness is an independent judge score and must not be treated as ground truth by itself.",
+    "Raw answers and retrieved context are omitted unless --include-text is explicitly supplied.",
+    "Retrieval metrics exclude cases whose labelled relevant chunk IDs do not map to the current corpus.",
+    "LlamaIndex reranker scores are not directly comparable to EKIP RRF scores; compare ranking metrics instead."
+  ]
+}

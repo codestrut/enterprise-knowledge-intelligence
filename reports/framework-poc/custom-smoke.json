@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "experiment": "ekip-llamaindex-ragas-poc-v1",
+  "timestamp_utc": "2026-10-12T19:50:11.330479+00:00",
+  "backend": "custom",
+  "document": "data/raw/nist_csf_2.0.pdf",
+  "query_count": 4,
+  "with_ragas": false,
+  "ragas_evaluator_model": null,
+  "metrics": {
+    "answer_success_rate": 1.0,
+    "refusal_accuracy": null,
+    "citation_validity_rate": 1.0,
+    "grounded_claim_rate": 0.6923076923076923,
+    "unsupported_claim_rate": 0.23076923076923078,
+    "contradicted_claim_rate": 0.07692307692307693,
+    "grounded_answer_rate": 0.5,
+    "mean_latency_seconds": 26.3143,
+    "retrieval_cases_scored": 4,
+    "hit_at_5": 0,
+    "recall_at_5": 0.0,
+    "mrr": 0.0,
+    "ragas_faithfulness_mean": null,
+    "ragas_faithfulness_scored_answers": 0,
+    "ragas_judge_errors": 0
+  },
+  "queries": [
+    {
+      "id": 1,
+      "query": "What is an Organizational Profile?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 30.4964,
+      "citation_valid": true,
+      "citation_count": 2,
+      "total_claims": 3,
+      "grounded_claims": 3,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        36,
+        39,
+        38,
+        106,
+        41
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "grounded",
+        "grounded"
+      ],
+      "retrieval": {
+        "mapped_relevant_chunk_ids": [
+          22
+        ],
+        "unmapped_relevant_chunk_ids": [
+          110,
+          111
+        ],
+        "hit_at_5": 0,
+        "recall_at_5": 0.0,
+        "mrr": 0.0
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 2,
+      "query": "What does NIST say about cybersecurity roles and responsibilities?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 47.5758,
+      "citation_valid": true,
+      "citation_count": 6,
+      "total_claims": 6,
+      "grounded_claims": 4,
+      "unsupported_claims": 1,
+      "contradicted_claims": 1,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        73,
+        76,
+        85,
+        29,
+        30
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded",
+        "unsupported",
+        "grounded",
+        "grounded",
+        "contradicted",
+        "grounded"
+      ],
+      "retrieval": {
+        "mapped_relevant_chunk_ids": [
+          77
+        ],
+        "unmapped_relevant_chunk_ids": [],
+        "hit_at_5": 0,
+        "recall_at_5": 0.0,
+        "mrr": 0.0
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 3,
+      "query": "What is GV.RR-01?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 6.4744,
+      "citation_valid": true,
+      "citation_count": 1,
+      "total_claims": 1,
+      "grounded_claims": 1,
+      "unsupported_claims": 0,
+      "contradicted_claims": 0,
+      "fully_grounded": true,
+      "retrieved_chunk_ids": [
+        73,
+        74,
+        75,
+        72,
+        71
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "grounded"
+      ],
+      "retrieval": {
+        "mapped_relevant_chunk_ids": [
+          77
+        ],
+        "unmapped_relevant_chunk_ids": [],
+        "hit_at_5": 0,
+        "recall_at_5": 0.0,
+        "mrr": 0.0
+      },
+      "ragas_faithfulness": null
+    },
+    {
+      "id": 4,
+      "query": "How can an organization prioritize cybersecurity activities?",
+      "answerable": true,
+      "answered": true,
+      "refused": false,
+      "latency_seconds": 20.7106,
+      "citation_valid": true,
+      "citation_count": 3,
+      "total_claims": 3,
+      "grounded_claims": 1,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "fully_grounded": false,
+      "retrieved_chunk_ids": [
+        49,
+        98,
+        24,
+        50,
+        29
+      ],
+      "retrieved_context_count": 5,
+      "grounding_statuses": [
+        "unsupported",
+        "unsupported",
+        "grounded"
+      ],
+      "retrieval": {
+        "mapped_relevant_chunk_ids": [
+          52
+        ],
+        "unmapped_relevant_chunk_ids": [],
+        "hit_at_5": 0,
+        "recall_at_5": 0.0,
+        "mrr": 0.0
+      },
+      "ragas_faithfulness": null
+    }
+  ],
+  "notes": [
+    "Existing EKIP citation, refusal, and grounding gates remain the hard safety checks.",
+    "Ragas faithfulness is an independent judge score and must not be treated as ground truth by itself.",
+    "Raw answers and retrieved context are omitted unless --include-text is explicitly supplied.",
+    "Retrieval metrics exclude cases whose labelled relevant chunk IDs do not map to the current corpus.",
+    "LlamaIndex reranker scores are not directly comparable to EKIP RRF scores; compare ranking metrics instead."
+  ]
+}
