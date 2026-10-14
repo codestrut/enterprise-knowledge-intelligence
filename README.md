@@ -34,3 +34,30 @@ python scripts/replay_grounding.py reports/replay/<run-name>.json --offline
 Claim statuses are `grounded`, `unsupported`, `contradicted` and `uncited`.
 See `docs/GROUNDING_FIXES_2026-10-12.md` for the current behavior and
 limitations.
+
+## Frontend
+
+The React + TypeScript development app lives in `frontend/`. Install its
+dependencies and start Vite from that directory:
+
+Prerequisites: Node.js `24.15.0` or newer within the 24.x release line and
+npm `11.19.1` or newer within the 11.x release line, matching the engine
+requirements in `frontend/package.json`.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The app expects the FastAPI backend at `http://127.0.0.1:8000` by default.
+Set `EKIP_API_PROXY_TARGET` in the environment before starting Vite to use a
+different backend URL, for example:
+
+```bash
+EKIP_API_PROXY_TARGET=http://localhost:8001 npm run dev
+```
+
+The dev server proxies `/health`, `/documents`, and `/query` to the configured
+backend. Type-check and build the frontend with `npm run check` and
+`npm run build` from `frontend/`.

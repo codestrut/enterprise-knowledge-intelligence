@@ -15,3 +15,7 @@ data/processed/
 # Local runtime data: do not commit uploaded documents or their manifest
 data/uploads/
 data/documents_manifest.json
+
+# Frontend dependencies and generated build output
+frontend/node_modules/
+frontend/dist/
