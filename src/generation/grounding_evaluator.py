@@ -67,6 +67,45 @@ class GroundingEvaluator:
             else ClaimDecomposer()
         )
 
+    @staticmethod
+    def _normalize_list_item(text):
+        """Normalize a short list item for exact source-membership checks."""
+        return " ".join(re.findall(r"[a-z0-9]+", str(text or "").casefold()))
+
+    @classmethod
+    def _is_exact_enumerated_list_item(cls, claim, evidence):
+        """Return True when a claim exactly matches an item in a source list.
+
+        This narrowly handles answer bullets such as ``Identify [Source 1]``
+        when the cited evidence explicitly enumerates ``Govern, Identify, ...``.
+        It is not general lexical-overlap support: the item must match an entry
+        in a colon-introduced list containing at least three entries.
+        """
+        normalized_claim = cls._normalize_list_item(claim)
+        if not normalized_claim:
+            return False
+
+        # Source lists are typically introduced by a label, e.g.
+        # "There are six CSF Functions: Govern, Identify, ...". Limit the
+        # deterministic check to the text after a colon and before sentence end.
+        for match in re.finditer(r":\s*([^.!?]+)", str(evidence or "")):
+            list_text = match.group(1).strip()
+            if not re.search(r",", list_text) or not re.search(r"\b(?:and|or)\b", list_text, re.IGNORECASE):
+                continue
+
+            # Normalize the Oxford comma first so the final item does not
+            # retain a leading conjunction ("and Recover").
+            list_text = re.sub(
+                r",\s*(?:and|or)\s+", ", ", list_text, flags=re.IGNORECASE
+            )
+            items = re.split(r",\s*|\s+(?:and|or)\s+", list_text, flags=re.IGNORECASE)
+            normalized_items = [cls._normalize_list_item(item) for item in items]
+            normalized_items = [item for item in normalized_items if item]
+            if len(normalized_items) >= 3 and normalized_claim in normalized_items:
+                return True
+
+        return False
+
     @classmethod
     def _has_content_overlap(cls, claim, evidence):
         """
@@ -200,9 +239,18 @@ class GroundingEvaluator:
                             {},
                         )
 
+                        exact_list_item_match = self._is_exact_enumerated_list_item(
+                            atomic_claim, evidence_item["text"]
+                        )
                         source_results.append({
-                            "label": result["label"],
+                            # Exact membership in an explicitly enumerated source
+                            # list is direct support even when NLI rejects a bare
+                            # noun fragment such as "Identify" as non-sentential.
+                            "label": (
+                                "entailment" if exact_list_item_match else result["label"]
+                            ),
                             "raw_label": result.get("raw_label", result["label"]),
+                            "exact_list_item_match": exact_list_item_match,
                             "relation_guard": result.get("relation_guard", {}),
                             "support_guard": result.get("support_guard", {}),
                             "probabilities": probabilities,
@@ -219,6 +267,7 @@ class GroundingEvaluator:
                             item["probabilities"].get("entailment", 0.0)
                             >= self.MIN_ENTAILMENT_PROBABILITY
                             or item.get("support_guard", {}).get("applied", False)
+                            or item.get("exact_list_item_match", False)
                         )
                         for item in source_results
                     )

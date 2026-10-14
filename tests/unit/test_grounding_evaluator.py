@@ -328,3 +328,53 @@ def test_anaphoric_claim_context_is_forwarded_to_decomposer():
             "Cybersecurity supply chain risk management (C-SCRM) is a systematic process.",
         ),
     ]
+
+def test_exact_item_in_explicit_source_list_is_grounded_even_if_nli_is_neutral():
+    """Bare answer bullets can be verified by exact membership in a cited list."""
+    evidence = (
+        "There are six CSF Functions: Govern, Identify, Protect, Detect, "
+        "Respond, and Recover."
+    )
+    evaluator = make_evaluator(nli_label="neutral", evidence_text=evidence)
+
+    for item in ("Govern", "Identify", "Protect", "Detect", "Respond", "Recover"):
+        result = evaluate_claim(evaluator, item, evidence)
+        atomic = result[0]["atomic_claims"][0]
+        assert result[0]["status"] == "grounded", item
+        assert atomic["status"] == "grounded", item
+        assert atomic["sources"][0]["evidence"][0]["exact_list_item_match"] is True, item
+
+
+def test_term_not_in_explicit_source_list_is_not_grounded_by_list_membership():
+    evidence = (
+        "There are six CSF Functions: Govern, Identify, Protect, Detect, "
+        "Respond, and Recover."
+    )
+    evaluator = make_evaluator(nli_label="neutral", evidence_text=evidence)
+
+    result = evaluate_claim(evaluator, "Exploit", evidence)
+
+    assert result[0]["status"] == "unsupported"
+    assert result[0]["atomic_claims"][0]["status"] == "unsupported"
+
+def test_all_six_cited_cs_f_functions_are_grounded_as_list_items():
+    evidence = (
+        "There are six CSF Functions: Govern, Identify, Protect, Detect, "
+        "Respond, and Recover."
+    )
+    items = ("Govern", "Identify", "Protect", "Detect", "Respond", "Recover")
+    answer = "\n".join(f"- {item} [Source 1]" for item in items)
+    evaluator = make_evaluator(nli_label="neutral", evidence_text=evidence)
+    source_documents = [{
+        "text": evidence,
+        "metadata": {"page": 31, "chunk_id": 117},
+    }]
+
+    result = evaluator.evaluate(
+        answer=answer,
+        source_map=SOURCE_MAP,
+        source_documents=source_documents,
+    )
+
+    assert len(result) == 6
+    assert all(item["status"] == "grounded" for item in result)

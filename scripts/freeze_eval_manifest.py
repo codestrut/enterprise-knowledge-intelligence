@@ -62,13 +62,20 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def git_value(*args: str) -> str | None:
+def git_value(*args: str, strip: bool = True) -> str | None:
+    """Run git and return stdout.
+
+    Pass strip=False for line-oriented output such as ``status --porcelain``:
+    stripping the whole string removes the leading space of the first line and
+    shifts its path by one character.
+    """
     try:
         result = subprocess.run(
             ["git", *args], cwd=ROOT, check=True, capture_output=True,
             text=True, timeout=5,
         )
-        return result.stdout.strip() or None
+        output = result.stdout.strip() if strip else result.stdout.rstrip("\n")
+        return output or None
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -109,7 +116,7 @@ def build_manifest(corpus_relative: str) -> dict[str, Any]:
     else:
         corpus_record["note"] = "Corpus fingerprint unavailable; verify the path before comparing runs."
 
-    status = git_value("status", "--porcelain") or ""
+    status = git_value("status", "--porcelain", strip=False) or ""
     changed_paths = []
     for line in status.splitlines():
         # Git status entries start with a two-character status code and a path.

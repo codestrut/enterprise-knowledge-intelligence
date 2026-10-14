@@ -6,7 +6,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from threading import RLock
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -16,6 +15,12 @@ from src.api.document_fingerprints import (
     find_duplicate_document,
     sha256_file,
 )
+from src.api.document_records import (
+    manifest_record,
+    public_record,
+    resolve_stored_path,
+)
+from src.api.rwlock import ReadWriteLock
 from src.knowledge_base import KnowledgeBase
 from src.rag_pipeline import RAGPipeline
 
@@ -34,8 +39,9 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 knowledge_base = KnowledgeBase()
 pipeline = RAGPipeline(knowledge_base=knowledge_base)
 
-# Protect document indexing, deletion, and queries from concurrent changes.
-knowledge_base_lock = RLock()
+# Queries share the lock (they only read the indexes) so one slow query does
+# not block others. Indexing and deletion take it exclusively.
+knowledge_base_lock = ReadWriteLock()
 
 
 class QueryRequest(BaseModel):
@@ -119,7 +125,7 @@ def _bootstrap_manifest():
         documents[document_id] = {
             "document_id": document_id,
             "filename": path.name,
-            "source": str(path.resolve()),
+            "stored_filename": path.name,
             "status": "pending",
         }
 
@@ -134,21 +140,19 @@ def _restore_knowledge_base():
     else:
         documents = _read_manifest()
 
-    restored_records = {}
+    persisted_records = {}
     failed_documents = []
 
     for document_id, saved_record in documents.items():
         try:
-            source_path = Path(saved_record["source"]).resolve()
+            # The path is derived from the document ID and confined to the
+            # upload directory; any path stored in the manifest is ignored.
+            source_path = resolve_stored_path(UPLOAD_DIRECTORY, document_id)
             filename = saved_record.get("filename", source_path.name)
-
-            # Never index arbitrary external paths from a manifest.
-            if not source_path.is_relative_to(UPLOAD_DIRECTORY.resolve()):
-                raise ValueError("Document path is outside the upload directory.")
 
             if not source_path.is_file():
                 raise FileNotFoundError(
-                    f"Uploaded PDF is missing: {source_path}"
+                    f"Uploaded PDF is missing: {source_path.name}"
                 )
 
             record = knowledge_base.add_pdf(
@@ -163,7 +167,9 @@ def _restore_knowledge_base():
             record["status"] = "indexed"
             record["sha256"] = saved_record.get("sha256") or sha256_file(source_path)
             knowledge_base.documents[document_id]["sha256"] = record["sha256"]
-            restored_records[document_id] = record.copy()
+            persisted_records[document_id] = manifest_record(
+                document_id, record
+            )
 
             logger.info(
                 "Restored document %s (%s), %d chunks",
@@ -179,11 +185,21 @@ def _restore_knowledge_base():
                 document_id,
                 exc,
             )
+            # Keep the record, marked failed, so a transient problem does not
+            # permanently drop the document. It is retried on the next start
+            # and can be removed with DELETE /documents/{document_id}.
+            persisted_records[document_id] = manifest_record(
+                document_id,
+                {
+                    **saved_record,
+                    "status": "failed",
+                    "error": exc.__class__.__name__,
+                },
+            )
 
-    # Persist only successfully restored documents. Failed records are
-    # logged and excluded from the active manifest rather than reported
-    # as indexed when their indexes do not exist.
-    _write_manifest(restored_records)
+    # Failed records stay in the manifest but are not loaded into the active
+    # indexes, so they are never reported as searchable.
+    _write_manifest(persisted_records)
 
     if failed_documents:
         logger.error(
@@ -202,7 +218,7 @@ def _restore_knowledge_base():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Restore document indexes before accepting requests."""
-    with knowledge_base_lock:
+    with knowledge_base_lock.write_lock():
         _restore_knowledge_base()
 
     yield
@@ -215,16 +231,35 @@ app = FastAPI(
 )
 
 
+def _count_failed_documents():
+    """Count manifest records that failed to restore; None if unreadable."""
+    try:
+        documents = _read_manifest()
+    except RuntimeError:
+        return None
+
+    return sum(
+        1
+        for record in documents.values()
+        if isinstance(record, dict) and record.get("status") == "failed"
+    )
+
+
 @app.get("/health")
 def health_check():
-    """Return API and knowledge-base status."""
-    with knowledge_base_lock:
-        return {
-            "status": "ok",
-            "document_count": len(knowledge_base.documents),
-            "chunk_count": len(knowledge_base.chunks),
-            "manifest_exists": MANIFEST_PATH.exists(),
-        }
+    """Return API and knowledge-base status.
+
+    Deliberately lock-free: a health probe must answer while a long query or
+    an indexing operation holds the knowledge-base lock. The manifest is
+    replaced atomically, so reading it without the lock is safe.
+    """
+    return {
+        "status": "ok",
+        "document_count": len(knowledge_base.documents),
+        "chunk_count": len(knowledge_base.chunks),
+        "manifest_exists": MANIFEST_PATH.exists(),
+        "failed_document_count": _count_failed_documents(),
+    }
 
 
 @app.post("/documents", status_code=201)
@@ -268,7 +303,7 @@ def upload_document(file: UploadFile = File(...)):
 
         uploaded_sha256 = sha256_file(stored_path)
 
-        with knowledge_base_lock:
+        with knowledge_base_lock.write_lock():
             existing_documents = _read_manifest()
             duplicate_record = find_duplicate_document(
                 file_digest=uploaded_sha256,
@@ -281,7 +316,7 @@ def upload_document(file: UploadFile = File(...)):
                     status_code=409,
                     detail={
                         "message": "Identical PDF content is already indexed.",
-                        "existing_document": duplicate_record,
+                        "existing_document": public_record(duplicate_record),
                     },
                 )
 
@@ -299,7 +334,7 @@ def upload_document(file: UploadFile = File(...)):
 
             updated_documents = {
                 **existing_documents,
-                document_id: record.copy(),
+                document_id: manifest_record(document_id, record),
             }
 
             try:
@@ -311,7 +346,7 @@ def upload_document(file: UploadFile = File(...)):
 
         return {
             "message": "Document indexed and registered successfully.",
-            "document": record.copy(),
+            "document": public_record(record),
         }
 
     except HTTPException:
@@ -340,8 +375,11 @@ def upload_document(file: UploadFile = File(...)):
 @app.get("/documents")
 def list_documents():
     """List documents currently indexed in memory."""
-    with knowledge_base_lock:
-        documents = knowledge_base.list_documents()
+    with knowledge_base_lock.read_lock():
+        documents = [
+            public_record(record)
+            for record in knowledge_base.list_documents()
+        ]
 
     return {
         "count": len(documents),
@@ -352,7 +390,9 @@ def list_documents():
 @app.post("/query")
 def query(request: QueryRequest):
     """Answer a question using the current knowledge base."""
-    with knowledge_base_lock:
+    # Shared lock: concurrent queries are fine. Indexing and deletion wait
+    # for in-flight queries and block new ones until they finish.
+    with knowledge_base_lock.read_lock():
         try:
             return pipeline.query(
                 question=request.question,
@@ -367,26 +407,37 @@ def query(request: QueryRequest):
 
 @app.delete("/documents/{document_id}")
 def delete_document(document_id: str):
-    """Remove a document from the indexes, manifest, and upload directory."""
-    with knowledge_base_lock:
-        record = knowledge_base.documents.get(document_id)
+    """Remove a document from the indexes, manifest, and upload directory.
 
-        if record is None:
+    Also removes a manifest record whose restore failed at startup, since
+    such a document is not loaded in memory and could not be deleted
+    otherwise.
+    """
+    try:
+        source_path = resolve_stored_path(UPLOAD_DIRECTORY, document_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document not found: {document_id}",
+        )
+
+    with knowledge_base_lock.write_lock():
+        record = knowledge_base.documents.get(document_id)
+        current_manifest = _read_manifest()
+        saved_record = current_manifest.get(document_id)
+
+        failed_restore = (
+            record is None
+            and isinstance(saved_record, dict)
+            and saved_record.get("status") == "failed"
+        )
+
+        if record is None and not failed_restore:
             raise HTTPException(
                 status_code=404,
                 detail=f"Document not found: {document_id}",
             )
 
-        source_path = Path(record["source"]).resolve()
-        upload_directory = UPLOAD_DIRECTORY.resolve()
-
-        if not source_path.is_relative_to(upload_directory):
-            raise HTTPException(
-                status_code=400,
-                detail="Document source is outside the upload directory.",
-            )
-
-        current_manifest = _read_manifest()
         updated_manifest = {
             key: value
             for key, value in current_manifest.items()
@@ -404,20 +455,30 @@ def delete_document(document_id: str):
                 detail="Could not persist document deletion.",
             ) from exc
 
-        try:
-            deleted_record = knowledge_base.delete_document(document_id)
-        except Exception as exc:
-            # Restore the prior manifest if in-memory deletion fails.
+        if failed_restore:
+            deleted_record = {
+                "filename": saved_record.get("filename", source_path.name),
+                "chunk_count": 0,
+            }
+        else:
             try:
-                _write_manifest(current_manifest)
-            except Exception:
-                logger.exception("Could not restore manifest after delete failure.")
+                deleted_record = knowledge_base.delete_document(document_id)
+            except Exception as exc:
+                # Restore the prior manifest if in-memory deletion fails.
+                try:
+                    _write_manifest(current_manifest)
+                except Exception:
+                    logger.exception(
+                        "Could not restore manifest after delete failure."
+                    )
 
-            logger.exception("Could not remove document from active indexes.")
-            raise HTTPException(
-                status_code=500,
-                detail="Could not remove document from active indexes.",
-            ) from exc
+                logger.exception(
+                    "Could not remove document from active indexes."
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not remove document from active indexes.",
+                ) from exc
 
         file_deleted = False
         cleanup_required = False

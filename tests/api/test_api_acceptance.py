@@ -3,6 +3,7 @@
 import importlib
 import json
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -84,6 +85,13 @@ def api_client(monkeypatch, tmp_path):
     manifest = tmp_path / "documents_manifest.json"
     monkeypatch.setattr(api, "UPLOAD_DIRECTORY", uploads)
     monkeypatch.setattr(api, "MANIFEST_PATH", manifest)
+    # Keep the real startup restore reachable for the restore tests below.
+    monkeypatch.setattr(
+        api,
+        "_real_restore_knowledge_base",
+        api._restore_knowledge_base,
+        raising=False,
+    )
     monkeypatch.setattr(api, "_restore_knowledge_base", lambda: None)
 
     with TestClient(api.app) as client:
@@ -180,3 +188,146 @@ def test_delete_unknown_document_returns_404(api_client):
     client, _, _, _ = api_client
     response = client.delete("/documents/not-present")
     assert response.status_code == 404
+
+
+def test_responses_and_manifest_do_not_expose_server_paths(api_client):
+    client, _, uploads, manifest_path = api_client
+
+    uploaded = client.post(
+        "/documents",
+        files={"file": ("a.pdf", _valid_fake_pdf(), "application/pdf")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    document = uploaded.json()["document"]
+    document_id = document["document_id"]
+    assert "source" not in document
+    assert "stored_filename" not in document
+    assert str(uploads) not in uploaded.text
+
+    listed = client.get("/documents")
+    assert "source" not in listed.json()["documents"][0]
+    assert str(uploads) not in listed.text
+
+    manifest_text = manifest_path.read_text(encoding="utf-8")
+    record = json.loads(manifest_text)["documents"][document_id]
+    assert "source" not in record
+    assert record["stored_filename"] == f"{document_id}.pdf"
+    assert str(uploads) not in manifest_text
+
+    duplicate = client.post(
+        "/documents",
+        files={"file": ("copy.pdf", _valid_fake_pdf(), "application/pdf")},
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"]["existing_document"]["document_id"] == document_id
+    assert "source" not in duplicate.json()["detail"]["existing_document"]
+    assert str(uploads) not in duplicate.text
+
+
+def test_restore_keeps_failed_records_and_ignores_stored_absolute_paths(api_client):
+    client, api, uploads, manifest_path = api_client
+    good_id, bad_id = "good-doc", "missing-doc"
+    (uploads / f"{good_id}.pdf").write_bytes(_valid_fake_pdf())
+    legacy_dir = "/Users/someone/enterprise/data/uploads"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "documents": {
+                    good_id: {
+                        "document_id": good_id,
+                        "filename": "Good.pdf",
+                        "source": f"{legacy_dir}/{good_id}.pdf",
+                        "status": "indexed",
+                    },
+                    bad_id: {
+                        "document_id": bad_id,
+                        "filename": "Bad.pdf",
+                        "source": f"{legacy_dir}/{bad_id}.pdf",
+                        "status": "indexed",
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    api._real_restore_knowledge_base()
+
+    persisted = json.loads(manifest_path.read_text(encoding="utf-8"))["documents"]
+    assert set(persisted) == {good_id, bad_id}
+    assert persisted[good_id]["status"] == "indexed"
+    assert "source" not in persisted[good_id]
+    assert persisted[bad_id]["status"] == "failed"
+    assert persisted[bad_id]["error"] == "FileNotFoundError"
+    assert "source" not in persisted[bad_id]
+    assert good_id in api.knowledge_base.documents
+    assert bad_id not in api.knowledge_base.documents
+    assert client.get("/health").json()["failed_document_count"] == 1
+
+    removed = client.delete(f"/documents/{bad_id}")
+    assert removed.status_code == 200, removed.text
+    after = json.loads(manifest_path.read_text(encoding="utf-8"))["documents"]
+    assert set(after) == {good_id}
+    assert client.delete(f"/documents/{bad_id}").status_code == 404
+
+
+def test_health_answers_while_the_knowledge_base_is_locked_for_writing(api_client):
+    client, api, _, _ = api_client
+    holding = threading.Event()
+    release = threading.Event()
+    result = {}
+
+    def hold_write_lock():
+        with api.knowledge_base_lock.write_lock():
+            holding.set()
+            release.wait(10)
+
+    def probe():
+        result["status"] = client.get("/health").status_code
+
+    holder = threading.Thread(target=hold_write_lock, daemon=True)
+    holder.start()
+    assert holding.wait(5)
+    probe_thread = threading.Thread(target=probe, daemon=True)
+    probe_thread.start()
+
+    try:
+        probe_thread.join(timeout=5)
+        answered = "status" in result  # checked before the lock is released
+    finally:
+        release.set()
+    holder.join(5)
+
+    assert answered, "/health blocked on the knowledge-base lock"
+    assert result["status"] == 200
+
+
+def test_queries_run_concurrently(api_client, monkeypatch):
+    client, api, _, _ = api_client
+    barrier = threading.Barrier(2, timeout=5)
+
+    class BarrierPipeline:
+        def query(self, question, top_k=5):
+            barrier.wait()  # passes only if both queries are inside at once
+            return {
+                "question": question,
+                "answer": "ok",
+                "sources": [],
+                "invalid_citations": [],
+                "refused": False,
+                "top_k": top_k,
+            }
+
+    monkeypatch.setattr(api, "pipeline", BarrierPipeline())
+    statuses = []
+
+    def ask():
+        statuses.append(client.post("/query", json={"question": "q"}).status_code)
+
+    threads = [threading.Thread(target=ask, daemon=True) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(15)
+
+    assert statuses == [200, 200]

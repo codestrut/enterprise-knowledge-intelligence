@@ -98,3 +98,53 @@ def test_saved_hash_is_reused_for_existing_manifest_entry(tmp_path, monkeypatch)
 
     assert match is not None
     assert match["document_id"] == "doc-1"
+
+
+def test_duplicate_is_found_from_document_id_when_no_source_is_stored(tmp_path):
+    existing = tmp_path / "doc-1.pdf"
+    incoming = tmp_path / "incoming.pdf"
+    existing.write_bytes(b"%PDF-same")
+    incoming.write_bytes(b"%PDF-same")
+    documents = {
+        "doc-1": {
+            "document_id": "doc-1",
+            "stored_filename": "doc-1.pdf",
+            "status": "indexed",
+        }
+    }
+
+    match = find_duplicate_document(sha256_file(incoming), documents, tmp_path)
+
+    assert match is not None
+    assert match["document_id"] == "doc-1"
+
+
+def test_legacy_absolute_source_outside_uploads_falls_back_to_document_id(tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    (uploads / "doc-1.pdf").write_bytes(b"%PDF-same")
+    incoming = uploads / "incoming.pdf"
+    incoming.write_bytes(b"%PDF-same")
+    documents = {
+        "doc-1": {
+            "document_id": "doc-1",
+            "source": "/Users/someone/project/data/uploads/doc-1.pdf",
+        }
+    }
+
+    match = find_duplicate_document(sha256_file(incoming), documents, uploads)
+
+    assert match is not None
+    assert match["document_id"] == "doc-1"
+
+
+def test_failed_and_pending_records_are_never_duplicates(tmp_path):
+    (tmp_path / "doc-1.pdf").write_bytes(b"%PDF-same")
+    incoming = tmp_path / "incoming.pdf"
+    incoming.write_bytes(b"%PDF-same")
+
+    for status in ("failed", "pending"):
+        documents = {"doc-1": {"document_id": "doc-1", "status": status}}
+        assert find_duplicate_document(
+            sha256_file(incoming), documents, tmp_path
+        ) is None

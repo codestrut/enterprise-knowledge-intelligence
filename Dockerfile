@@ -15,8 +15,12 @@ COPY requirements.docker.txt .
 RUN pip install --no-cache-dir -r requirements.docker.txt
 
 COPY src ./src
-COPY data ./data
 COPY pytest.ini .
+
+# Uploaded documents and the manifest are runtime data. They are never baked
+# into the image; mount a volume to keep them, for example:
+#   docker run -v ekip-data:/app/data -p 8000:8000 <image>
+RUN mkdir -p /app/data/uploads
 
 EXPOSE 8000
 
