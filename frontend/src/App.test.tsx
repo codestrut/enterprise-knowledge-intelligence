@@ -9,6 +9,14 @@ afterEach(() => {
 });
 
 describe("API health overview", () => {
+  it("continues to render the system dashboard at /", async () => {
+    window.history.replaceState({}, "", "/");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "ok", document_count: 0, chunk_count: 0, failed_document_count: 0 }), { status: 200 })));
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "A clearer view of what your knowledge can do." })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Ask your knowledge base" })).toBeNull();
+  });
+
   it("shows live health metrics after a successful response", async () => {
     vi.stubGlobal(
       "fetch",

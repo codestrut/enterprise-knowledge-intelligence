@@ -10,9 +10,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
-        "/health": { target, changeOrigin: true },
-        "/documents": { target, changeOrigin: true },
-        "/query": { target, changeOrigin: true },
+        "/api": {
+          target,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api(?=\/|$)/, ""),
+        },
       },
     },
     test: {

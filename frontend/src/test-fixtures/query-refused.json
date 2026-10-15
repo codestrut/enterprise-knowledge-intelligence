@@ -1,0 +1,77 @@
+{
+  "question": "What is the current Bitcoin price in Nigerian naira?",
+  "answer": "I don't have sufficient evidence in the available knowledge base to answer that question.",
+  "sources": [
+    {
+      "text": "Executives\nmonitor cybersecurity risks in the\nsame context as financial and other\norganizational risks. The organizational\nbudget is based on an understanding\nof the current and predicted risk\nenvironment and risk tolerance.\nBusiness units implement executive\nvision and analyze system-level risks in\nthe context of the organizational risk\ntolerances.\nCybersecurity risk management is part\nof the org",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 30,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 113,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:113"
+      },
+      "score": -11.141885757446289
+    },
+    {
+      "text": "Organizational Profile that specifies the Core outcomes that an organization is currently achieving (or\nattempting to achieve) and characterizes how or to what extent each outcome is being achieved.\nCSF Function\nThe highest level of organization for cybersecurity outcomes. There are six CSF Functions: Govern, Identify,\nProtect, Detect, Respond, and Recover.\nCSF Implementation Example\nA concise, ac",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 31,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 117,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:117"
+      },
+      "score": -11.167450904846191
+    },
+    {
+      "text": "curity\nrequirements and standards followed by the organization, practices and tools (e.g.,\nprocedures and safeguards), and work roles.\n3. Create the Organizational Profile. Determine what types of information the Profile\nshould include for the selected CSF outcomes, and document the needed information.\nConsider the risk implications of the Current Profile to inform Target Profile planning\nand prio",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 12,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 42,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:42"
+      },
+      "score": -11.174703598022461
+    },
+    {
+      "text": "25\nTier Cybersecurity Risk Governance Cybersecurity Risk Management\nThe organization risk strategy is informed by the\ncybersecurity risks associated with its suppliers and the\nproducts and services it acquires and uses. Personnel\nformally act upon those risks through mechanisms such\nas written agreements to communicate baseline\nrequirements, governance structures (e.g., risk councils),\nand policy ",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 30,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 112,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:112"
+      },
+      "score": -11.178752899169922
+    },
+    {
+      "text": "26\nAppendix C. Glossary\nCSF Category\nA group of related cybersecurity outcomes that collectively comprise a CSF Function.\nCSF Community Profile\nA baseline of CSF outcomes that is created and published to address shared interests and goals among a number of\norganizations. A Community Profile is typically developed for a particular sector, subsector, technology, threat\ntype, or other use case. An or",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 31,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 116,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:116"
+      },
+      "score": -11.19413948059082
+    }
+  ],
+  "source_map": {},
+  "citations": [],
+  "invalid_citations": [],
+  "grounding": [],
+  "evidence": {
+    "sufficient": false,
+    "score": -11.141885757446289,
+    "threshold": 4.3,
+    "reason": "Retrieved evidence did not meet the relevance threshold; generation should be refused."
+  },
+  "refused": true
+}

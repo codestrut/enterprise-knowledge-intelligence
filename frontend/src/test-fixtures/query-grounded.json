@@ -1,0 +1,273 @@
+{
+  "question": "What are the six Functions of the NIST CSF 2.0?",
+  "answer": "The six Functions are: Govern, Identify, Protect, Detect, Respond, and Recover [Source 5].",
+  "sources": [
+    {
+      "text": "NIST CSWP 29 The NIST Cybersecurity Framework (CSF) 2.0\nFebruary 26, 2024\n 4\nimprovement opportunities for the organization’s policies, plans, processes, procedures,\nand practices that support cybersecurity risk management to inform efforts under all six\nFunctions.\n• PROTECT (PR) — Safeguards to manage the organization’s cybersecurity risks are used.\nOnce assets and risks are identified and priori",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 9,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 30,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:30"
+      },
+      "score": 8.12854290008545
+    },
+    {
+      "text": "NIST CSWP 29 The NIST Cybersecurity Framework (CSF) 2.0\nFebruary 26, 2024\n\n15\nAppendix A. CSF Core\nThis appendix describes the Functions, Categories, and Subcategories of the CSF Core. Table 1\nlists the CSF 2.0 Core Function and Category names and unique alphabetic identifiers. Each\nFunction name in the table is linked to its portion of the appendix. The order of Functions,\nCategories, and Subcate",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 20,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 70,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:70"
+      },
+      "score": 5.873999118804932
+    },
+    {
+      "text": "NIST CSWP 29 The NIST Cybersecurity Framework (CSF) 2.0\nFebruary 26, 2024\n 1\n1. Cybersecurity Framework (CSF) Overview\nThis document is version 2.0 of the NIST Cybersecurity Framework (Framework or CSF). It\nincludes the following components:\n• CSF Core, the nucleus of the CSF, which is a taxonomy of high-level cybersecurity\noutcomes that can help any organization manage its cybersecurity risks. Th",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 6,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 20,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:20"
+      },
+      "score": 5.618873119354248
+    },
+    {
+      "text": "NIST CSWP 29 The NIST Cybersecurity Framework (CSF) 2.0\nFebruary 26, 2024\n 3\n2. Introduction to the CSF Core\nAppendix A is the CSF Core — a set of cybersecurity outcomes arranged by Function, then\nCategory, and finally Subcategory, as depicted in Fig. 1. These outcomes are not a checklist of\nactions to perform; specific actions taken to achieve an outcome will vary by organization and\nuse case, as",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 8,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 27,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:27"
+      },
+      "score": 4.775689125061035
+    },
+    {
+      "text": "Organizational Profile that specifies the Core outcomes that an organization is currently achieving (or\nattempting to achieve) and characterizes how or to what extent each outcome is being achieved.\nCSF Function\nThe highest level of organization for cybersecurity outcomes. There are six CSF Functions: Govern, Identify,\nProtect, Detect, Respond, and Recover.\nCSF Implementation Example\nA concise, ac",
+      "metadata": {
+        "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+        "page": 31,
+        "document_id": "cfef3c64-139d-45ac-85bd-5fdd11d60b39",
+        "filename": "nist_csf_2.0.pdf",
+        "chunk_id": 117,
+        "chunk_key": "cfef3c64-139d-45ac-85bd-5fdd11d60b39:117"
+      },
+      "score": 4.077323913574219
+    }
+  ],
+  "source_map": {
+    "1": {
+      "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+      "page": 9,
+      "chunk_id": 30
+    },
+    "2": {
+      "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+      "page": 20,
+      "chunk_id": 70
+    },
+    "3": {
+      "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+      "page": 6,
+      "chunk_id": 20
+    },
+    "4": {
+      "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+      "page": 8,
+      "chunk_id": 27
+    },
+    "5": {
+      "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+      "page": 31,
+      "chunk_id": 117
+    }
+  },
+  "citations": [
+    {
+      "source_number": 5,
+      "source": "cfef3c64-139d-45ac-85bd-5fdd11d60b39.pdf",
+      "page": 31,
+      "chunk_id": 117
+    }
+  ],
+  "invalid_citations": [],
+  "grounding": [
+    {
+      "claim": "The six Functions are: Govern, Identify, Protect, Detect, Respond, and Recover",
+      "atomic_claims": [
+        {
+          "claim": "The six Functions are: Govern, Identify, Protect, Detect, Respond, and Recover",
+          "sources": [
+            {
+              "source_number": 5,
+              "label": "entailment",
+              "conflict_detected": false,
+              "evidence": [
+                {
+                  "label": "entailment",
+                  "raw_label": "entailment",
+                  "exact_list_item_match": false,
+                  "relation_guard": {
+                    "applied": false,
+                    "reason": "No guard needed for this raw NLI label.",
+                    "minimum_shared_terms": 2,
+                    "minimum_claim_term_coverage": 0.4,
+                    "claim_term_coverage": 1,
+                    "shared_content_terms": [
+                      "detect",
+                      "function",
+                      "govern",
+                      "identify",
+                      "protect",
+                      "recover",
+                      "respond",
+                      "six"
+                    ],
+                    "shared_content_term_count": 8,
+                    "claim_content_term_count": 8,
+                    "evidence_content_term_count": 9,
+                    "conflict_cue_required": true,
+                    "conflict_cues": []
+                  },
+                  "support_guard": {
+                    "applied": false,
+                    "reason": "Support recovery applies only to raw neutral predictions.",
+                    "minimum_claim_terms": 3,
+                    "minimum_term_coverage": 0.9,
+                    "minimum_ordered_coverage": 0.9,
+                    "minimum_relaxed_ordered_coverage": 0.7,
+                    "minimum_relaxed_claim_terms": 8,
+                    "relaxed_order_recovery_applied": false,
+                    "claim_content_terms": [
+                      "detect",
+                      "function",
+                      "govern",
+                      "identify",
+                      "protect",
+                      "recover",
+                      "respond",
+                      "six"
+                    ],
+                    "shared_content_terms": [
+                      "detect",
+                      "function",
+                      "govern",
+                      "identify",
+                      "protect",
+                      "recover",
+                      "respond",
+                      "six"
+                    ],
+                    "claim_content_term_count": 8,
+                    "term_coverage": 1,
+                    "ordered_coverage": 1,
+                    "claim_protected_markers": [],
+                    "evidence_protected_markers": [],
+                    "protected_markers_match": true
+                  },
+                  "probabilities": {
+                    "contradiction": 0.00012282905310096243,
+                    "entailment": 0.9964185975021287,
+                    "neutral": 0.0034585734447703303
+                  },
+                  "evidence": "There are six CSF Functions: Govern, Identify, Protect, Detect, Respond, and Recover.",
+                  "evidence_score": 0.8077505826950073
+                },
+                {
+                  "label": "neutral",
+                  "raw_label": "neutral",
+                  "exact_list_item_match": false,
+                  "relation_guard": {
+                    "applied": false,
+                    "reason": "No guard needed for this raw NLI label.",
+                    "minimum_shared_terms": 2,
+                    "minimum_claim_term_coverage": 0.4,
+                    "claim_term_coverage": 0.125,
+                    "shared_content_terms": [
+                      "function"
+                    ],
+                    "shared_content_term_count": 1,
+                    "claim_content_term_count": 8,
+                    "evidence_content_term_count": 6,
+                    "conflict_cue_required": true,
+                    "conflict_cues": []
+                  },
+                  "support_guard": {
+                    "applied": false,
+                    "reason": "Meaningful claim-term coverage is below the near-extractive threshold.",
+                    "minimum_claim_terms": 3,
+                    "minimum_term_coverage": 0.9,
+                    "minimum_ordered_coverage": 0.9,
+                    "minimum_relaxed_ordered_coverage": 0.7,
+                    "minimum_relaxed_claim_terms": 8,
+                    "relaxed_order_recovery_applied": false,
+                    "claim_content_terms": [
+                      "detect",
+                      "function",
+                      "govern",
+                      "identify",
+                      "protect",
+                      "recover",
+                      "respond",
+                      "six"
+                    ],
+                    "shared_content_terms": [
+                      "function"
+                    ],
+                    "claim_content_term_count": 8,
+                    "term_coverage": 0.125,
+                    "ordered_coverage": 0.125,
+                    "claim_protected_markers": [],
+                    "evidence_protected_markers": [],
+                    "protected_markers_match": true
+                  },
+                  "probabilities": {
+                    "contradiction": 0.0004980000717102027,
+                    "entailment": 0.0008509784879882546,
+                    "neutral": 0.9986510214403015
+                  },
+                  "evidence": "CSF Function The highest level of organization for cybersecurity outcomes.",
+                  "evidence_score": 0.3166552186012268
+                }
+              ]
+            }
+          ],
+          "status": "grounded"
+        }
+      ],
+      "status": "grounded"
+    }
+  ],
+  "evidence": {
+    "sufficient": true,
+    "score": 8.12854290008545,
+    "threshold": 4.3,
+    "reason": "Evidence passed the relevance threshold."
+  },
+  "refused": false,
+  "generation_repair": {
+    "attempted": false,
+    "accepted": false,
+    "reason": "initial_answer_passed_grounding",
+    "initial_issue_count": 0,
+    "initial_diagnostics": {
+      "empty_answer": false,
+      "explicit_abstention": false,
+      "citation_marker_count": 1,
+      "grounding_claim_count": 1,
+      "grounding_status_counts": {
+        "grounded": 1
+      },
+      "invalid_citation_count": 0,
+      "passes_grounding": true
+    }
+  }
+}

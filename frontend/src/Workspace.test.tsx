@@ -1,6 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Workspace, { resolveCitationSources } from "./Workspace";
+import groundedFixture from "./test-fixtures/query-grounded.json";
+import refusalFixture from "./test-fixtures/query-refused.json";
+import { postQuery } from "./api/client";
 
 const success = {
   question: "What is policy?",
@@ -50,9 +53,119 @@ describe("Knowledge workspace", () => {
     expect(verification).not.toBeNull();
     expect(within(verification!).getByText("Policy goal passage")).toBeTruthy();
     expect(within(verification!).queryByText("/app/data/uploads/private.pdf")).toBeNull();
+    expect(within(verification!).getByText(/uncited = no citation was provided, so the claim is not verified/i)).toBeTruthy();
     expect(screen.getByText(/Backend evidence score: 4.8/)).toBeTruthy();
+    const sourceCard = document.getElementById("source-1")!;
+    sourceCard.scrollIntoView = vi.fn();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    fireEvent.click(screen.getByRole("button", { name: "Go to Source 1" }));
+    expect(document.activeElement).toBe(sourceCard);
     fireEvent.click(screen.getByText("How this was checked"));
     expect(screen.queryByRole("heading", { name: "Claim checks" })).toBeNull();
+  });
+
+  it("separates cited sources from retrieved-but-uncited passages", async () => {
+    mockResponse({
+      answer: "The answer uses [Source 1].",
+      sources: [
+        { text: "Cited passage", metadata: { source: "cited.pdf", page: 1, chunk_id: "a" } },
+        { text: "Retrieved from /app/data/private.pdf", metadata: { source: "other.pdf", page: 2, chunk_id: "b" } },
+      ],
+      citations: [{ source_number: 1, source: "cited.pdf", page: 1, chunk_id: "a" }],
+      source_map: { "1": { source: "cited.pdf", page: 1, chunk_id: "a" } },
+    });
+    render(<Workspace />);
+    await ask();
+    await screen.findByRole("heading", { name: "Answer" });
+    expect(screen.getByRole("heading", { name: "Sources cited in the answer" })).toBeTruthy();
+    expect(screen.getByText("Cited passage")).toBeTruthy();
+    const disclosure = screen.getByText("Retrieved, not cited (1)");
+    expect(disclosure.closest("details")?.open).toBe(false);
+    fireEvent.click(disclosure);
+    expect(screen.getByText("Retrieved from private.pdf")).toBeTruthy();
+    expect(screen.queryByText(/\/app\/data\/private\.pdf/)).toBeNull();
+  });
+
+  it.each([
+    ["", 1],
+    ["0", 1],
+    ["-4", 1],
+    ["21", 20],
+  ])("keeps top_k in range when the input is %s", async (input, expected) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ answer: "ok" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Workspace />);
+    fireEvent.change(screen.getByLabelText("Retrieved passages Choose 1 to 20 (default 5)"), { target: { value: input } });
+    await ask();
+    await screen.findByRole("heading", { name: "Answer" });
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body as string) as { top_k: number };
+    expect(sent.top_k).toBe(expected);
+    expect(Number.isFinite(sent.top_k) && sent.top_k >= 1 && sent.top_k <= 20).toBe(true);
+  });
+
+  it("does not issue a second request while a query is in flight", async () => {
+    const fetchMock = vi.fn((_url: string, _init: RequestInit) => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Workspace />);
+    await ask();
+    const form = screen.getByLabelText("Your question").closest("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a non-JSON 504 message and retries through the existing action", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("<html>gateway</html>", { status: 504 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ answer: "Recovered answer." }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Workspace />);
+    await ask();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("The server took too long to respond or is unavailable (HTTP 504). The query may still be running. Try again shortly.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Recovered answer.")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("meets the real grounded response contract with a valid citation and nested evidence", async () => {
+    mockResponse(groundedFixture);
+    const response = await postQuery({ question: groundedFixture.question, top_k: 5 }, new AbortController().signal);
+    expect(resolveCitationSources(response).size).toBeGreaterThan(0);
+    const groundedClaim = response.grounding?.find((claim) => claim.status === "grounded");
+    const nestedPassage = groundedClaim?.atomic_claims?.flatMap((claim) => claim.sources ?? [])
+      .flatMap((source) => source.evidence ?? [])
+      .find((entry) => typeof entry.evidence === "string")?.evidence;
+    expect(nestedPassage).toEqual(expect.any(String));
+
+    mockResponse(groundedFixture);
+    render(<Workspace />);
+    await ask();
+    await screen.findByRole("heading", { name: "Answer" });
+    expect(screen.getByRole("button", { name: /Go to Source/ })).toBeTruthy();
+    const verification = screen.getByRole("heading", { name: "Claim verification" }).closest("section");
+    expect(verification).not.toBeNull();
+    expect(within(verification!).getByText(nestedPassage!)).toBeTruthy();
+  });
+
+  it("renders the real refusal fixture without exposing filesystem paths", async () => {
+    mockResponse(refusalFixture);
+    render(<Workspace />);
+    await ask();
+    expect(await screen.findByRole("heading", { name: "A sufficient answer wasn’t available" })).toBeTruthy();
+    expect(screen.getByText(/did not support a sufficient answer/i)).toBeTruthy();
+    expect(screen.getByText("Retrieved, not cited (5)")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/(?:^|\s)\/(?:app|Users|private|tmp)\//);
+    expect(document.body.textContent).not.toMatch(/[A-Za-z]:\\/);
+  });
+
+  it("sanitizes filesystem paths in API-rendered answer text", async () => {
+    mockResponse({ answer: "Stored at /app/data/uploads/private.pdf." });
+    render(<Workspace />);
+    await ask();
+    expect(await screen.findByText("Stored at private.pdf.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("/app/data/uploads/private.pdf");
   });
 
   it("warns for unmapped citations and handles refusals with retrieved passages", async () => {
@@ -64,6 +177,7 @@ describe("Knowledge workspace", () => {
     expect(screen.getByText(/could not be matched to a returned source/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Go to Source 1" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Go to Source 4" })).toBeNull();
+    fireEvent.click(screen.getByText("Retrieved, not cited (1)"));
     expect(screen.getByRole("heading", { name: "related.pdf" })).toBeTruthy();
     expect(screen.getByText("Passages insufficient to support an answer")).toBeTruthy();
     expect(screen.queryByText("/internal/path/related.pdf")).toBeNull();

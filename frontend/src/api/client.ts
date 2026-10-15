@@ -13,7 +13,7 @@ export async function postQuery(
 ): Promise<QueryResponse> {
   let response: Response;
   try {
-    response = await fetch("/query", {
+    response = await fetch("/api/query", {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(request),
@@ -28,15 +28,27 @@ export async function postQuery(
   try {
     payload = await response.json();
   } catch {
-    throw new ApiRequestError("The EKIP API returned an unreadable response.");
+    payload = undefined;
   }
   if (!response.ok) {
-    throw new ApiRequestError(`${readApiDetail(payload) || `The EKIP API returned HTTP ${response.status}.`}`);
+    const detail = readApiDetail(payload)?.trim();
+    throw new ApiRequestError(detail || queryHttpError(response.status));
+  }
+  if (payload === undefined) {
+    throw new ApiRequestError("The EKIP API returned an unreadable response.");
   }
   if (!isQueryResponse(payload)) {
     throw new ApiRequestError("The EKIP API returned an unexpected query response.");
   }
   return normalizeQueryResponse(payload);
+}
+
+function queryHttpError(status: number): string {
+  if (status === 502 || status === 503 || status === 504) {
+    return `The server took too long to respond or is unavailable (HTTP ${status}). The query may still be running. Try again shortly.`;
+  }
+  if (status === 429) return "Too many requests (HTTP 429). Wait a moment and try again.";
+  return `The EKIP API returned HTTP ${status}.`;
 }
 
 export function readApiDetail(payload: unknown): string | undefined {
@@ -145,7 +157,7 @@ export async function getHealth(
   let response: Response;
 
   try {
-    response = await fetch("/health", {
+    response = await fetch("/api/health", {
       headers: { Accept: "application/json" },
       signal,
     });

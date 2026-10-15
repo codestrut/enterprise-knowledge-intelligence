@@ -40,13 +40,14 @@ limitations.
 The React + TypeScript development app lives in `frontend/`. Install its
 dependencies and start Vite from that directory:
 
-Prerequisites: Node.js `24.15.0` or newer within the 24.x release line and
-npm `11.19.1` or newer within the 11.x release line, matching the engine
-requirements in `frontend/package.json`.
+Prerequisites: Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`, matching the
+combined requirements of the frontend dependencies. Use a current npm
+release compatible with your Node.js installation; the frontend does not
+restrict the npm version.
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -58,6 +59,8 @@ different backend URL, for example:
 EKIP_API_PROXY_TARGET=http://localhost:8001 npm run dev
 ```
 
-The dev server proxies `/health`, `/documents`, and `/query` to the configured
-backend. Type-check and build the frontend with `npm run check` and
-`npm run build` from `frontend/`.
+The frontend calls `/api/health` and `/api/query`; Vite rewrites `/api` and
+proxies those paths to the backend's `/health` and `/query` routes. The
+`/api/documents` prefix is also available for future frontend API requests.
+Type-check, test and build the frontend with `npm run check`,
+`npm test -- --reporter=dot`, and `npm run build` from `frontend/`.

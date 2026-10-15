@@ -29,6 +29,7 @@ export default function Workspace() {
   const sourceLinks = useMemo(() => result ? resolveCitationSources(result) : new Map<number, { citation: QueryCitation; source: QuerySource }>(), [result]);
   const answerCitationNumbers = useMemo(() => result ? citationNumbers(result.answer) : [], [result]);
   const unmapped = answerCitationNumbers.filter((number) => !sourceLinks.has(number));
+  const citedSourceNumbers = useMemo(() => new Set(answerCitationNumbers.filter((number) => sourceLinks.has(number))), [answerCitationNumbers, sourceLinks]);
   const refused = result?.refused === true || result?.evidence?.sufficient === false;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -97,6 +98,7 @@ export default function Workspace() {
     const target = sourceRefs.current[number];
     if (!target) return;
     target.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+    target.focus({ preventScroll: true });
     target.classList.add("source-card--highlighted");
     window.setTimeout(() => target.classList.remove("source-card--highlighted"), 1800);
   }
@@ -123,7 +125,7 @@ export default function Workspace() {
         <details className="advanced-control">
           <summary>Advanced</summary>
           <label htmlFor="top-k">Retrieved passages <span>Choose 1 to 20 (default 5)</span></label>
-          <input id="top-k" type="number" min={1} max={20} value={topK} onChange={(event) => setTopK(Math.max(1, Math.min(20, Number(event.target.value) || 1)))} disabled={state === "loading"} />
+          <input id="top-k" type="number" min={1} max={20} value={topK} onChange={(event) => setTopK(clampTopK(event.target.value))} disabled={state === "loading"} />
         </details>
         <div className="submit-row">
           <span className="form-hint">Answers are limited to evidence in your available documents.</span>
@@ -148,14 +150,17 @@ export default function Workspace() {
           <p className="copy-feedback" role="status" aria-live="polite">{copyMessage}</p>
           <VerificationSummary claims={result.grounding ?? []} />
           <details className="diagnostics-details"><summary>How this was checked</summary><div className="diagnostics-content">
-            {result.evidence && <div><h3>Evidence sufficiency</h3><p>{result.evidence.sufficient === true ? "The evidence gate allowed generation to proceed." : result.evidence.sufficient === false ? "The evidence gate did not allow generation to proceed." : "No evidence-gate result was returned."}</p>{result.evidence.reason && <p>{result.evidence.reason}</p>}{typeof result.evidence.score === "number" && <p>Backend evidence score: {result.evidence.score}{typeof result.evidence.threshold === "number" ? ` (threshold ${result.evidence.threshold})` : ""}. This is a backend relevance score, not a probability.</p>}</div>}
-            {result.generation_repair && <div><h3>Generation repair</h3><p>{result.generation_repair.attempted ? `Repair attempted${result.generation_repair.accepted ? " and accepted" : " but not accepted"}.` : "No repair was needed."}</p>{result.generation_repair.mode && <p>Mode: {result.generation_repair.mode}</p>}{result.generation_repair.reason && <p>{result.generation_repair.reason}</p>}{result.generation_repair.initial_issue_count != null && <p>Initial issue count: {result.generation_repair.initial_issue_count}</p>}</div>}
+            {result.evidence && <div><h3>Evidence sufficiency</h3><p>{result.evidence.sufficient === true ? "The evidence gate allowed generation to proceed." : result.evidence.sufficient === false ? "The evidence gate did not allow generation to proceed." : "No evidence-gate result was returned."}</p>{result.evidence.reason && <p>{safeDisplayText(result.evidence.reason)}</p>}{typeof result.evidence.score === "number" && <p>Backend evidence score: {result.evidence.score}{typeof result.evidence.threshold === "number" ? ` (threshold ${result.evidence.threshold})` : ""}. This is a backend relevance score, not a probability.</p>}</div>}
+            {result.generation_repair && <div><h3>Generation repair</h3><p>{result.generation_repair.attempted ? `Repair attempted${result.generation_repair.accepted ? " and accepted" : " but not accepted"}.` : "No repair was needed."}</p>{result.generation_repair.mode && <p>Mode: {safeDisplayText(result.generation_repair.mode)}</p>}{result.generation_repair.reason && <p>{safeDisplayText(result.generation_repair.reason)}</p>}{result.generation_repair.initial_issue_count != null && <p>Initial issue count: {result.generation_repair.initial_issue_count}</p>}</div>}
             {!!result.invalid_citations?.length && <div><h3>Citation validation</h3><p>The API reported invalid citation references: {result.invalid_citations.map((number) => `[Source ${number}]`).join(", ")}.</p></div>}
             {!result.evidence && !result.generation_repair && !result.invalid_citations?.length && <p>No additional check details were returned.</p>}
           </div></details>
         </article>
-        {result.sources?.length ? <section className="sources-panel" aria-labelledby="sources-title"><div className="sources-heading"><p className="eyebrow">{refused ? "RETRIEVED PASSAGES" : "RETRIEVED SOURCES"}</p><h2 id="sources-title">{refused ? "Passages insufficient to support an answer" : "Sources"}</h2>{refused && <p>These passages were retrieved, but they did not pass the evidence check. They are not verified evidence for an answer.</p>}</div>
-          <div className="source-list">{result.sources.map((source, index) => { const number = index + 1; const citation = sourceLinks.get(number)?.citation; const meta = source.metadata ?? {}; const title = sourceName(source, citation); const page = citation?.page ?? meta.page; return <article className="source-card" id={`source-${number}`} key={`${number}-${title}`} ref={(node) => { sourceRefs.current[number] = node; }}><div className="source-card-top"><span className="source-number">Source {number}</span>{page != null && <span className="page-label">Page {String(page)}</span>}</div><h3>{title}</h3><p className="source-excerpt">{source.text || "No passage text was returned."}</p></article>; })}</div>
+        {result.sources?.length ? <section className="sources-panel" aria-labelledby="sources-title"><div className="sources-heading"><p className="eyebrow">{refused ? "EVIDENCE CHECK" : "ANSWER SOURCES"}</p><h2 id="sources-title">{refused ? "Passages insufficient to support an answer" : "Sources cited in the answer"}</h2>{refused && <p>These passages were retrieved, but they did not pass the evidence check. They are not verified evidence for an answer.</p>}</div>
+          {result.sources.some((_source, index) => citedSourceNumbers.has(index + 1))
+            ? <div className="source-list">{result.sources.map((source, index) => { const number = index + 1; if (!citedSourceNumbers.has(number)) return null; const citation = sourceLinks.get(number)?.citation; const title = sourceName(source, citation); return <SourceCard key={`${number}-${title}`} source={source} number={number} citation={citation} registerSource={(node) => { sourceRefs.current[number] = node; }} />; })}</div>
+            : <p className="uncited-empty">No retrieved passage is cited by this answer.</p>}
+          {result.sources.some((_source, index) => !citedSourceNumbers.has(index + 1)) && <details className="uncited-sources"><summary>Retrieved, not cited ({result.sources.filter((_source, index) => !citedSourceNumbers.has(index + 1)).length})</summary><div className="source-list">{result.sources.map((source, index) => { const number = index + 1; if (citedSourceNumbers.has(number)) return null; const title = sourceName(source); return <SourceCard key={`${number}-${title}`} source={source} number={number} registerSource={(node) => { sourceRefs.current[number] = node; }} />; })}</div></details>}
         </section> : null}
       </section>}
       <footer className="footer"><span>EKIP <span aria-hidden="true">·</span> Enterprise Knowledge Intelligence Platform</span><a href="/">System overview</a></footer>
@@ -234,26 +239,53 @@ function renderCitations(answer: string, map: Map<number, { citation: QueryCitat
   for (const match of answer.matchAll(SOURCE_REF)) {
     const index = match.index ?? 0;
     const number = Number(match[1]);
-    if (index > lastIndex) pieces.push(answer.slice(lastIndex, index));
+    if (index > lastIndex) pieces.push(safeDisplayText(answer.slice(lastIndex, index)));
     pieces.push(map.has(number)
       ? <button className="citation-link" type="button" key={`${index}-${number}`} onClick={() => onSelect(number)} aria-label={`Go to Source ${number}`}>[Source {number}]</button>
       : <span className="invalid-citation" key={`${index}-${number}`}>[Source {number}]</span>);
     lastIndex = index + match[0].length;
   }
-  if (!pieces.length) return answer;
-  if (lastIndex < answer.length) pieces.push(answer.slice(lastIndex));
+  if (!pieces.length) return safeDisplayText(answer);
+  if (lastIndex < answer.length) pieces.push(safeDisplayText(answer.slice(lastIndex)));
   return pieces.map((piece, index) => <span key={index}>{piece}</span>);
 }
 
 function VerificationSummary({ claims }: { claims: QueryResponse["grounding"] }) {
   if (!claims?.length) return null;
   const grounded = claims.filter((claim) => claim.status === "grounded").length;
-  return <section className="verification-section"><div className="verification-heading"><h3>Claim verification</h3><span>{grounded} of {claims.length} claims marked grounded</span></div><ul className="claim-list">{claims.map((claim, index) => <li key={`${index}-${claim.claim ?? "claim"}`}><StatusIcon status={claim.status} /><div><strong>{claim.status || "Status not provided"}</strong>{claim.claim && <p>{claim.claim}</p>}{claim.reason && <p>{claim.reason}</p>}<ReturnedPassages claim={claim} /></div></li>)}</ul></section>;
+  return <section className="verification-section"><div className="verification-heading"><h3>Claim verification</h3><span>{grounded} of {claims.length} claims marked grounded</span></div><ClaimStatusLegend /><ul className="claim-list">{claims.map((claim, index) => <li key={`${index}-${claim.claim ?? "claim"}`}><StatusIcon status={claim.status} /><div><strong>{safeDisplayText(claim.status || "Status not provided")}</strong>{claim.claim && <p>{safeDisplayText(claim.claim)}</p>}{claim.reason && <p>{safeDisplayText(claim.reason)}</p>}<ReturnedPassages claim={claim} /></div></li>)}</ul></section>;
 }
 
 function ReturnedPassages({ claim }: { claim: NonNullable<QueryResponse["grounding"]>[number] }) {
   const passages = groundingPassages(claim);
   return passages.length ? <ul className="grounding-passages">{passages.map((passage, index) => <li key={index}><blockquote>{passage}</blockquote></li>)}</ul> : null;
+}
+
+function SourceCard({
+  source,
+  number,
+  citation,
+  registerSource,
+}: {
+  source: QuerySource;
+  number: number;
+  citation?: QueryCitation;
+  registerSource: (node: HTMLElement | null) => void;
+}) {
+  const metadata = source.metadata ?? {};
+  const title = sourceName(source, citation);
+  const page = citation?.page ?? metadata.page;
+  return <article className="source-card" id={`source-${number}`} aria-label={`Source ${number}: ${title}`} tabIndex={-1} ref={registerSource}><div className="source-card-top"><span className="source-number">Source {number}</span>{page != null && <span className="page-label">Page {String(page)}</span>}</div><h3>{title}</h3><p className="source-excerpt">{source.text ? safeDisplayText(source.text) : "No passage text was returned."}</p></article>;
+}
+
+function clampTopK(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(20, Math.floor(parsed) || 1));
+}
+
+function safeDisplayText(value: string): string {
+  return value.replace(/(?:[A-Za-z]:\\(?:[^\\\s"'<>]+\\)*[^\\\s"'<>]+|\/(?:[^/\s"'<>]+\/)*[^/\s"'<>]+)/g, (path) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? "document");
 }
 
 function groundingPassages(claim: Record<string, unknown>): string[] {
@@ -275,18 +307,22 @@ function groundingPassages(claim: Record<string, unknown>): string[] {
         for (const item of evidence) {
           if (!item || typeof item !== "object") continue;
           const text = (item as Record<string, unknown>).evidence;
-          if (isPassageText(text)) passages.push(text.trim());
+          if (isPassageText(text)) passages.push(safeDisplayText(text.trim()));
         }
       }
     }
   }
-  if (claim.status === "grounded" && isPassageText(claim.supporting_passage)) passages.unshift(claim.supporting_passage.trim());
+  if (claim.status === "grounded" && isPassageText(claim.supporting_passage)) passages.unshift(safeDisplayText(claim.supporting_passage.trim()));
   return [...new Set(passages)].slice(0, 3);
 }
 
 function StatusIcon({ status }: { status?: string }) {
   const symbols: Record<string, string> = { grounded: "✓", unsupported: "!", contradicted: "×", uncited: "○" };
   return <span className={`claim-status claim-status--${status ?? "unknown"}`} aria-hidden="true">{symbols[status ?? ""] ?? "•"}</span>;
+}
+
+function ClaimStatusLegend() {
+  return <p className="claim-status-legend"><strong>Status guide:</strong> grounded = supported by the cited passage; unsupported = no sufficient support found; contradicted = evidence conflicts with the claim; uncited = no citation was provided, so the claim is not verified.</p>;
 }
 
 function sourceName(source: QuerySource, citation?: QueryCitation): string {
