@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getHealth } from "./api/client";
 import type { HealthResponse } from "./api/types";
+import Workspace from "./Workspace";
+
+export default function App() {
+  return window.location.pathname === "/workspace" ? <Workspace /> : <Dashboard />;
+}
 
 type HealthState =
   | { kind: "loading" }
@@ -10,7 +15,7 @@ type HealthState =
 
 const REFRESH_INTERVAL_MS = 30_000;
 
-export default function App() {
+function Dashboard() {
   const [state, setState] = useState<HealthState>({ kind: "loading" });
   const [refreshing, setRefreshing] = useState(false);
 
@@ -86,6 +91,7 @@ export default function App() {
           <span className="brand-divider" aria-hidden="true" />
           <span className="brand-caption">Knowledge intelligence</span>
         </a>
+        <nav aria-label="Main navigation" className="main-nav"><a href="/" aria-current="page">System overview</a><a href="/workspace">Workspace</a></nav>
         <span className={statusClass} role="status" aria-live="polite">
           <span className="status-dot" aria-hidden="true" />
           {statusLabel}
@@ -181,7 +187,7 @@ export default function App() {
 
       <footer className="footer">
         <span>EKIP <span aria-hidden="true">·</span> Enterprise Knowledge Intelligence Platform</span>
-        <span>Grounded in your organization’s knowledge</span>
+        <a href="/workspace">Open knowledge workspace</a>
       </footer>
     </main>
   );

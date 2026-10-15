@@ -5,6 +5,7 @@ import App from "./App";
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("API health overview", () => {
@@ -45,5 +46,12 @@ describe("API health overview", () => {
     expect(await screen.findByText("Backend unavailable")).toBeTruthy();
     expect(screen.queryByText("Operational")).toBeNull();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("serves the workspace at /workspace while keeping the overview at /", () => {
+    window.history.replaceState({}, "", "/workspace");
+    render(<App />);
+    expect(screen.getByRole("heading", { name: "Ask your knowledge base" })).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "System overview" }).every((link) => link.getAttribute("href") === "/")).toBe(true);
   });
 });
