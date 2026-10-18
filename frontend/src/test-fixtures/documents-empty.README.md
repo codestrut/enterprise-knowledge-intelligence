@@ -1,0 +1,3 @@
+This is the unmodified JSON response from `GET http://127.0.0.1:5173/api/documents` through the existing Vite proxy on 2026-10-15. The backend returned HTTP 200, `count: 0`, and an empty `documents` array. The paired health response reported zero documents and chunks.
+
+The backend API writes uploaded files and its manifest/index under the repository's protected `data/` directory. Task 04 explicitly forbids modifying anything there, so no upload, duplicate, deletion, non-PDF, or oversized-file workflow was run against this shared backend. Those UI/API branches are tested with mocked responses and are not labelled as live fixtures. No document-list-with-one-record fixture is claimed to be a real response.

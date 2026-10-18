@@ -17,10 +17,14 @@ class KnowledgeBase:
         embedder=None,
         chunk_size=200,
         overlap=30,
+        tenant_id=None,
+        reranker=None,
     ):
         self.embedder = embedder or Embedder()
         self.chunk_size = chunk_size
         self.overlap = overlap
+        self.tenant_id = tenant_id
+        self.reranker = reranker
 
         self.documents = {}
         self.chunks = []
@@ -50,6 +54,11 @@ class KnowledgeBase:
         for page in pages:
             page["metadata"]["document_id"] = document_id
             page["metadata"]["filename"] = path.name
+            if self.tenant_id is not None:
+                # RAG context and citations may expose the source metadata, so
+                # tenant workspaces carry only the client-visible basename.
+                page["metadata"]["source"] = path.name
+                page["metadata"]["organisation_id"] = str(self.tenant_id)
 
         new_chunks = chunk_documents(
             pages,
@@ -71,6 +80,7 @@ class KnowledgeBase:
                 chunks=new_chunks,
                 embeddings=embeddings,
                 embedder=self.embedder,
+                reranker=self.reranker,
             )
         else:
             self.retriever.add_documents(new_chunks)

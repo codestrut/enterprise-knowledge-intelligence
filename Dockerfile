@@ -15,6 +15,8 @@ COPY requirements.docker.txt .
 RUN pip install --no-cache-dir -r requirements.docker.txt
 
 COPY src ./src
+COPY migrations ./migrations
+COPY alembic.ini ./alembic.ini
 COPY pytest.ini .
 
 # Uploaded documents and the manifest are runtime data. They are never baked

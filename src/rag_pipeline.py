@@ -29,10 +29,24 @@ from src.retrieval.reranked_retriever import RerankedRetriever
 logger = logging.getLogger(__name__)
 
 
+def _retrieval_debug_enabled():
+    """Content-bearing retrieval diagnostics are development-only and off by default."""
+
+    return os.getenv("EKIP_DEBUG_RETRIEVAL_LOGGING", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
 class RAGPipeline:
     """End-to-end retrieval-augmented generation pipeline."""
 
-    def __init__(self, document_path=None, knowledge_base=None, retrieval_backend=None):
+    def __init__(
+        self,
+        document_path=None,
+        knowledge_base=None,
+        retrieval_backend=None,
+        grounding_evaluator=None,
+    ):
         if document_path is None and knowledge_base is None:
             raise ValueError(
                 "Provide either document_path or knowledge_base."
@@ -98,12 +112,19 @@ class RAGPipeline:
 
         self.llm = LLMClient()
 
-        self.grounding_evaluator = GroundingEvaluator(
-            embedder=self.embedder,
+        self.grounding_evaluator = (
+            grounding_evaluator
+            if grounding_evaluator is not None
+            else GroundingEvaluator(embedder=self.embedder)
         )
 
-    def query(self, question, top_k=5):
+    def query(self, question, top_k=5, tenant_id=None):
         """Run retrieval, generation, citation validation and grounding."""
+
+        if self.knowledge_base is not None:
+            configured_tenant = getattr(self.knowledge_base, "tenant_id", None)
+            if configured_tenant is not None and str(tenant_id) != str(configured_tenant):
+                raise ValueError("Tenant context does not match the knowledge base.")
 
         if self.knowledge_base is not None:
             # Resolve the current retriever so document changes are visible.
@@ -130,69 +151,77 @@ class RAGPipeline:
             active_retriever = self.retriever
             chunk_count = len(self.chunks)
 
-        logger.info("[RAG DEBUG] Question: %s", question)
-        logger.info(
+        # Default logs must never contain questions, answers, prompts or retrieved text.
+        debug_retrieval = _retrieval_debug_enabled()
+
+        def debug_log(message, *args):
+            if debug_retrieval:
+                logger.info(message, *args)
+
+        debug_log("[RAG DEBUG] Question: %s", question)
+        debug_log(
             "[RAG DEBUG] Active retriever exists: %s",
             active_retriever is not None,
         )
-        logger.info("[RAG DEBUG] Knowledge-base chunks: %d", chunk_count)
+        debug_log("[RAG DEBUG] Knowledge-base chunks: %d", chunk_count)
 
         if active_retriever is None:
             retrieved_documents = []
-            logger.warning(
+            debug_log(
                 "[RAG DEBUG] No active retriever; retrieval skipped."
             )
         else:
             hybrid = active_retriever.hybrid_retriever
 
-            logger.info(
+            debug_log(
                 "[RAG DEBUG] Hybrid chunks: %d",
                 len(hybrid.chunks),
             )
-            logger.info(
+            debug_log(
                 "[RAG DEBUG] FAISS vectors: %d",
                 hybrid.vector_retriever.vector_store.index.ntotal,
             )
-            logger.info(
+            debug_log(
                 "[RAG DEBUG] Vector chunks: %d",
                 len(hybrid.vector_retriever.chunks),
             )
-            logger.info(
+            debug_log(
                 "[RAG DEBUG] BM25 chunks: %d",
                 len(hybrid.bm25_retriever.chunks),
             )
 
-            # Probe the hybrid stage independently to determine whether
-            # candidates exist before cross-encoder reranking.
-            try:
-                hybrid_results = hybrid.retrieve(
-                    question,
-                    top_k=max(top_k, 5),
-                    candidate_k=10,
-                )
-
-                logger.info(
-                    "[RAG DEBUG] Hybrid candidates: %d",
-                    len(hybrid_results),
-                )
-
-                for index, document in enumerate(
-                    hybrid_results[:3], start=1
-                ):
-                    metadata = document.get("metadata", {})
-                    logger.info(
-                        "[RAG DEBUG] Hybrid result %d: score=%s, "
-                        "document_id=%s, page=%s",
-                        index,
-                        document.get("score"),
-                        metadata.get("document_id"),
-                        metadata.get("page"),
+            if debug_retrieval:
+                # Probe the hybrid stage independently to determine whether
+                # candidates exist before cross-encoder reranking.
+                try:
+                    hybrid_results = hybrid.retrieve(
+                        question,
+                        top_k=max(top_k, 5),
+                        candidate_k=10,
                     )
 
-            except Exception:
-                logger.exception(
-                    "[RAG DEBUG] Hybrid retrieval probe failed."
-                )
+                    debug_log(
+                        "[RAG DEBUG] Hybrid candidates: %d",
+                        len(hybrid_results),
+                    )
+
+                    for index, document in enumerate(
+                        hybrid_results[:3], start=1
+                    ):
+                        metadata = document.get("metadata", {})
+                        debug_log(
+                            "[RAG DEBUG] Hybrid result %d: score=%s, "
+                            "document_id=%s, page=%s",
+                            index,
+                            document.get("score"),
+                            metadata.get("document_id"),
+                            metadata.get("page"),
+                        )
+
+                except Exception:
+                    logger.exception(
+                        "[RAG DEBUG] Hybrid retrieval probe failed."
+                    )
 
             # Run the original production retrieval path.
             try:
@@ -200,13 +229,14 @@ class RAGPipeline:
                     question,
                     top_k=top_k,
                 )
-            except Exception:
-                logger.exception(
-                    "[RAG DEBUG] Full retrieval/reranking failed."
-                )
+            except Exception as exc:
+                if debug_retrieval:
+                    logger.exception("[RAG DEBUG] Full retrieval/reranking failed.")
+                else:
+                    logger.error("Retrieval/reranking failed (%s).", type(exc).__name__)
                 raise
 
-            logger.info(
+            debug_log(
                 "[RAG DEBUG] Final retrieved documents: %d",
                 len(retrieved_documents),
             )
@@ -215,7 +245,7 @@ class RAGPipeline:
                 retrieved_documents[:3], start=1
             ):
                 metadata = document.get("metadata", {})
-                logger.info(
+                debug_log(
                     "[RAG DEBUG] Final result %d: score=%s, "
                     "document_id=%s, page=%s",
                     index,
@@ -226,7 +256,7 @@ class RAGPipeline:
 
         evidence_result = check_evidence(retrieved_documents)
 
-        logger.info(
+        debug_log(
             "[RAG DEBUG] Evidence sufficient: %s; reason: %s",
             evidence_result["sufficient"],
             evidence_result["reason"],
@@ -448,8 +478,11 @@ class RAGPipeline:
                             "grounded_subset_used": False,
                         })
 
-            except Exception:
-                logger.exception("Grounding/recovery attempt failed; abstaining.")
+            except Exception as exc:
+                if debug_retrieval:
+                    logger.exception("Grounding/recovery attempt failed; abstaining.")
+                else:
+                    logger.error("Grounding/recovery attempt failed (%s); abstaining.", type(exc).__name__)
                 answer = ABSTENTION_TEXT
                 citation_result = validate_citations(
                     answer=answer,

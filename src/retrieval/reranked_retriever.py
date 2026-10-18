@@ -7,14 +7,14 @@ from src.retrieval.reranker import Reranker
 class RerankedRetriever:
     """Retrieve candidates with hybrid search, then rerank them."""
 
-    def __init__(self, chunks, embeddings, embedder=None):
+    def __init__(self, chunks, embeddings, embedder=None, reranker=None):
         self.hybrid_retriever = HybridRetriever(
             chunks=chunks,
             embeddings=embeddings,
             embedder=embedder,
         )
 
-        self.reranker = Reranker()
+        self.reranker = reranker if reranker is not None else Reranker()
 
     def add_documents(self, chunks):
         """Add documents to the underlying hybrid retrieval indexes."""

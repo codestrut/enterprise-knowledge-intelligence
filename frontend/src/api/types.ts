@@ -6,6 +6,42 @@ export interface HealthResponse {
   failed_document_count?: number | null;
 }
 
+export interface CurrentUserProfile {
+  email: string;
+  organisation: { id: string; name: string };
+  role: string;
+  permissions: string[];
+}
+
+export interface DocumentRecord {
+  document_id?: string;
+  filename?: string;
+  page_count?: number | null;
+  chunk_count?: number | null;
+  status?: string | null;
+  sha256?: string;
+  [key: string]: unknown;
+}
+
+export interface DocumentListResponse {
+  count: number;
+  documents: DocumentRecord[];
+}
+
+export interface UploadResponse {
+  message?: string;
+  document: DocumentRecord;
+}
+
+export interface DeleteResponse {
+  message?: string;
+  document_id: string;
+  filename?: string;
+  chunks_removed?: number;
+  file_deleted: boolean;
+  cleanup_required: boolean;
+}
+
 export interface QueryRequest {
   question: string;
   top_k: number;

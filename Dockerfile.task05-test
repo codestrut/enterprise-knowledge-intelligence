@@ -1,0 +1,26 @@
+FROM ekip-api:v1
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install only the authentication and database dependencies
+# added by Task 05. Existing ML dependencies come from ekip-api:v1.
+RUN pip install --no-cache-dir \
+    'SQLAlchemy==2.1.4' \
+    'alembic==1.20.0' \
+    'argon2-cffi==25.1.0' \
+    'psycopg[binary]==3.3.6'
+
+# Copy the current Task 05.2 application and migrations.
+COPY src ./src
+COPY migrations ./migrations
+COPY alembic.ini ./alembic.ini
+COPY pytest.ini .
+
+RUN mkdir -p /app/data/uploads
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

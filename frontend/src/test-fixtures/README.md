@@ -1,7 +1,9 @@
-# Live query response fixtures
+# API response fixtures
 
-These JSON files are captured responses from the real FastAPI backend through the Vite development proxy at `http://127.0.0.1:5173/api/query` on 2026-10-15. The grounded-request fixture was captured with the existing NIST CSF 2.0 PDF temporarily indexed; the refusal fixture is the response to the unsupported Bitcoin-price question while the document was indexed. The grounded request returned HTTP 200 in 10.832 seconds with `refused: false`, a grounded claim and one citation. The unsupported request returned HTTP 200 in 0.489 seconds with `refused: true` and insufficient evidence.
+`query-grounded.json` and `query-refused.json` were captured from the real FastAPI backend through the Vite proxy on 2026-10-15 during the prior Task 03.1 verification. They are sanitized copies; response shape and nesting are retained, strings are capped at 400 characters, and absolute paths are replaced with basenames. Details and test document cleanup are in the Task 03.1 handoff report in that earlier delivery.
 
-The backend initially reported zero documents. The NIST PDF was uploaded through `/api/documents` only for these checks. After capture, only the returned temporary document ID was deleted. Both `/documents` and `/health` then reported zero documents and zero chunks. Upload and query outcomes, timings, and cleanup verification are recorded in `HANDOFF_REPORT.md`.
+`documents-empty.json` is the exact response from `GET http://127.0.0.1:5173/api/documents` through Vite on 2026-10-15. The response was HTTP 200 with `count: 0` and `documents: []`; paired health reported zero documents and chunks. Its capture and safety constraints are recorded in `documents-empty.README.md`.
 
-Sanitisation preserved the response keys, object structure, arrays, and nesting. Individual string values longer than 400 characters were truncated to 400 characters. Absolute filesystem path values were replaced with their basenames. No PDF, manifest, local evaluation data, credentials, or API keys are included.
+`query-empty-refusal.json` is the exact JSON body from a read-only `POST http://127.0.0.1:5173/api/query` on 2026-10-15 against that empty knowledge base. It returned HTTP 200 in 0.020526 seconds with `refused: true`, `evidence.sufficient: false`, and no sources or citations.
+
+No one-document list, upload, duplicate, wrong-file, oversized-file, or delete fixture is labelled as real in this task. Those operations persist to or delete files in the protected repository `data/` directory, which Task 04 forbids modifying. Such code paths are covered using mocked API responses in frontend tests; live mutation workflow coverage is not verified.

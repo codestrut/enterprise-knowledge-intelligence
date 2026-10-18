@@ -19,3 +19,5 @@ data/documents_manifest.json
 # Frontend dependencies and generated build output
 frontend/node_modules/
 frontend/dist/
+frontend/playwright-report/
+frontend/test-results/

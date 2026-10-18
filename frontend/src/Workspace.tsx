@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { postQuery } from "./api/client";
 import type { QueryCitation, QueryResponse, QuerySource, QuerySourceMapEntry } from "./api/types";
+import { AppLink } from "./AppShell";
+import { useKnowledgeBase } from "./KnowledgeBaseContext";
+import { Icon } from "./Icons";
 
 const REQUEST_TIMEOUT_MS = 120_000;
 const SOURCE_REF = /\[Source\s+(\d+)\]/g;
@@ -8,6 +11,7 @@ const SOURCE_REF = /\[Source\s+(\d+)\]/g;
 type RequestState = "idle" | "loading" | "success" | "error" | "cancelled" | "timeout";
 
 export default function Workspace() {
+  const knowledgeBase = useKnowledgeBase();
   const [question, setQuestion] = useState("");
   const [topK, setTopK] = useState(5);
   const [state, setState] = useState<RequestState>("idle");
@@ -20,6 +24,9 @@ export default function Workspace() {
   const answerHeading = useRef<HTMLHeadingElement>(null);
   const sourceRefs = useRef<Record<number, HTMLElement | null>>({});
 
+  // Abandon an in-flight query when the workspace unmounts (for example on sign-out).
+  useEffect(() => () => controller.current?.abort(), []);
+
   useEffect(() => {
     if (state !== "loading") return;
     const timer = window.setInterval(() => setElapsed((time) => time + 1), 1000);
@@ -31,6 +38,7 @@ export default function Workspace() {
   const unmapped = answerCitationNumbers.filter((number) => !sourceLinks.has(number));
   const citedSourceNumbers = useMemo(() => new Set(answerCitationNumbers.filter((number) => sourceLinks.has(number))), [answerCitationNumbers, sourceLinks]);
   const refused = result?.refused === true || result?.evidence?.sufficient === false;
+  const documentCount = typeof knowledgeBase.health?.document_count === "number" ? knowledgeBase.health.document_count : knowledgeBase.documents.length;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -104,20 +112,16 @@ export default function Workspace() {
   }
 
   return (
-    <main className="workspace-shell">
-      <header className="topbar workspace-topbar">
-        <a className="brand" href="/" aria-label="EKIP system overview">
-          <span className="brand-mark" aria-hidden="true"><span /><span /><span /><span /></span>
-          <span className="brand-name">EKIP</span><span className="brand-divider" aria-hidden="true" /><span className="brand-caption">Knowledge intelligence</span>
-        </a>
-        <nav aria-label="Main navigation" className="main-nav"><a href="/">System overview</a><a href="/workspace" aria-current="page">Workspace</a></nav>
-      </header>
-
+    <main className="page-section workspace-page">
       <section className="workspace-intro" aria-labelledby="workspace-title">
         <p className="eyebrow"><span /> KNOWLEDGE WORKSPACE</p>
-        <h1 id="workspace-title">Ask your knowledge base</h1>
+        <h1 id="workspace-title" tabIndex={-1}>Ask your knowledge base</h1>
         <p>Get answers from the available documents, with citations and verification details you can inspect.</p>
       </section>
+
+      {knowledgeBase.status === "available" && <div className="workspace-scope"><span>Searching {documentCount} {documentCount === 1 ? "document" : "documents"}</span>{knowledgeBase.documents.length > 0 && knowledgeBase.documents.length <= 10 && <details><summary>View documents</summary><ul>{knowledgeBase.documents.map((document, index) => <li key={document.document_id ?? index}>{safeDisplayText(documentName(document.filename))}</li>)}</ul></details>}</div>}
+      {knowledgeBase.status === "available" && documentCount === 0 && <aside className="workspace-empty"><span className="large-icon"><span aria-hidden="true">i</span></span><div><strong>Answers depend on indexed documents</strong><p>Upload a PDF to give EKIP evidence to search. The question form stays available, and the API will report when it cannot support an answer.</p></div><AppLink href="/library">Upload a PDF</AppLink></aside>}
+      <div className="example-questions"><p>Examples. Answers appear only if your documents cover them.</p><div>{["What are the main requirements?", "Summarize the key risks.", "Which steps should be completed first?"].map((example) => <button key={example} type="button" className="example-chip" onClick={() => { setQuestion(example); document.getElementById("question")?.focus(); }}>{example}</button>)}</div></div>
 
       <form className="question-panel" onSubmit={(event) => void submit(event)}>
         <label htmlFor="question">Your question</label>
@@ -129,7 +133,7 @@ export default function Workspace() {
         </details>
         <div className="submit-row">
           <span className="form-hint">Answers are limited to evidence in your available documents.</span>
-          {state === "loading" ? <button type="button" className="secondary-button" onClick={cancel}>Stop waiting</button> : <button className="primary-button" type="submit" disabled={!question.trim()}>Ask EKIP <span aria-hidden="true">→</span></button>}
+          {state === "loading" ? <button type="button" className="secondary-button" onClick={cancel}>Stop waiting</button> : <button className="primary-button" type="submit" disabled={!question.trim()}>Ask EKIP <Icon name="arrow"/></button>}
         </div>
       </form>
 
@@ -163,7 +167,6 @@ export default function Workspace() {
           {result.sources.some((_source, index) => !citedSourceNumbers.has(index + 1)) && <details className="uncited-sources"><summary>Retrieved, not cited ({result.sources.filter((_source, index) => !citedSourceNumbers.has(index + 1)).length})</summary><div className="source-list">{result.sources.map((source, index) => { const number = index + 1; if (citedSourceNumbers.has(number)) return null; const title = sourceName(source); return <SourceCard key={`${number}-${title}`} source={source} number={number} registerSource={(node) => { sourceRefs.current[number] = node; }} />; })}</div></details>}
         </section> : null}
       </section>}
-      <footer className="footer"><span>EKIP <span aria-hidden="true">·</span> Enterprise Knowledge Intelligence Platform</span><a href="/">System overview</a></footer>
     </main>
   );
 }
@@ -317,8 +320,8 @@ function groundingPassages(claim: Record<string, unknown>): string[] {
 }
 
 function StatusIcon({ status }: { status?: string }) {
-  const symbols: Record<string, string> = { grounded: "✓", unsupported: "!", contradicted: "×", uncited: "○" };
-  return <span className={`claim-status claim-status--${status ?? "unknown"}`} aria-hidden="true">{symbols[status ?? ""] ?? "•"}</span>;
+  const icons: Record<string, "check" | "attention" | "close" | "workspace"> = { grounded: "check", unsupported: "attention", contradicted: "close", uncited: "workspace" };
+  return <span className={`claim-status claim-status--${status ?? "unknown"}`} aria-hidden="true"><Icon name={icons[status ?? ""] ?? "workspace"}/></span>;
 }
 
 function ClaimStatusLegend() {

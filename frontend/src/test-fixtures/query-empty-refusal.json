@@ -1,0 +1,16 @@
+{
+  "question": "What are the key topics in the indexed documents?",
+  "answer": "I don't have sufficient evidence in the available knowledge base to answer that question.",
+  "sources": [],
+  "source_map": {},
+  "citations": [],
+  "invalid_citations": [],
+  "grounding": [],
+  "evidence": {
+    "sufficient": false,
+    "score": null,
+    "threshold": 4.3,
+    "reason": "No evidence was retrieved."
+  },
+  "refused": true
+}

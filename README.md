@@ -59,8 +59,11 @@ different backend URL, for example:
 EKIP_API_PROXY_TARGET=http://localhost:8001 npm run dev
 ```
 
-The frontend calls `/api/health` and `/api/query`; Vite rewrites `/api` and
-proxies those paths to the backend's `/health` and `/query` routes. The
-`/api/documents` prefix is also available for future frontend API requests.
+The frontend calls `/api/health`, `/api/documents`, and `/api/query`; Vite
+rewrites `/api` and proxies those paths to the backend's `/health`,
+`/documents`, and `/query` routes. The UI pages are `/` (System Overview),
+`/library` (Document Management), and `/workspace` (Knowledge Workspace).
+The document library uploads PDF files up to the backend's 25 MB limit and
+uses the existing synchronous upload, list, and delete operations.
 Type-check, test and build the frontend with `npm run check`,
 `npm test -- --reporter=dot`, and `npm run build` from `frontend/`.

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import Workspace, { resolveCitationSources } from "./Workspace";
 import groundedFixture from "./test-fixtures/query-grounded.json";
 import refusalFixture from "./test-fixtures/query-refused.json";
+import emptyRefusalFixture from "./test-fixtures/query-empty-refusal.json";
 import { postQuery } from "./api/client";
 
 const success = {
@@ -268,6 +269,16 @@ describe("Knowledge workspace", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("[^1]: policy.pdf, p. 3")));
     expect(writeText.mock.calls[0][0]).toContain("[^2]: guide.pdf, p. 8");
     expect(writeText.mock.calls[0][0]).toContain("The policy sets a goal [^1].");
+  });
+
+  it("keeps the live empty-knowledge-base refusal behavior intact", async () => {
+    mockResponse(emptyRefusalFixture);
+    render(<Workspace/>);
+    await ask();
+    expect(await screen.findByRole("heading", { name: "A sufficient answer wasn’t available" })).toBeTruthy();
+    expect(screen.getByText(/did not support a sufficient answer/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Go to Source/ })).toBeNull();
+    expect(screen.getByText("I don't have sufficient evidence in the available knowledge base to answer that question.")).toBeTruthy();
   });
 });
 
