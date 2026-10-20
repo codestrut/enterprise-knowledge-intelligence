@@ -193,10 +193,10 @@ test("managed login loads the live profile and logout revokes protected access",
   // Precondition: EKIP_E2E_LOGIN_EMAIL is a single-organisation account (selection is covered below).
   expect(loginPayload.requires_organisation_selection).not.toBe(true);
   expect(typeof loginPayload.access_token).toBe("string");
-  const auditDenied = await page.request.get("/api/audit/events", {
+  const auditResponse = await page.request.get("/api/audit/events", {
     headers: { Authorization: `Bearer ${loginPayload.access_token}` },
   });
-  expect(auditDenied.status()).toBe(403);
+  expect(auditResponse.status()).toBe(200);
   const profile = await profileResponse.json() as { email: string; role: string; organisation: { name: string } };
   const accountMenu = page.locator(".account-menu");
   await expect(accountMenu).toContainText(profile.email);

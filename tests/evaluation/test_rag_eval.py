@@ -144,6 +144,19 @@ def print_grounding_diagnostics(evaluations):
             f"  Evidence sufficient: {evaluation['evidence_sufficient']}\n"
         )
 
+        # Keep the benchmark strict, but expose why an answerable query was refused.
+        if evaluation["answerable"] and evaluation["refused"]:
+            result = evaluation["result"]
+            evidence = result.get("evidence", {})
+            print("\nUNEXPECTED REFUSAL DIAGNOSTIC")
+            print("  Query:", evaluation["query"])
+            print("  Evidence score:", evidence.get("score"))
+            print("  Evidence threshold:", evidence.get("threshold"))
+            print("  Evidence sufficient:", evidence.get("sufficient"))
+            print("  Evidence reason:", evidence.get("reason"))
+            print("  Answer:", result.get("answer"))
+            print("  Generation repair:", result.get("generation_repair"))
+
 
 def test_rag_pipeline_evaluation():
     """Run the end-to-end RAG evaluation benchmark."""

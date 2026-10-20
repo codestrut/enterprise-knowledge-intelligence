@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const apiTarget = process.env.EKIP_API_PROXY_TARGET ?? "http://127.0.0.1:8001";
+const apiTarget = process.env.EKIP_API_PROXY_TARGET ?? "http://127.0.0.1:8002";
 let targetUrl: URL;
 
 try {
@@ -10,18 +10,18 @@ try {
 }
 
 if (targetUrl.port === "8000") {
-  throw new Error("Playwright refuses production API port 8000. Set EKIP_API_PROXY_TARGET to http://127.0.0.1:8001.");
+  throw new Error("Playwright refuses production API port 8000. Set EKIP_API_PROXY_TARGET to http://127.0.0.1:8002.");
 }
 
 if (
   targetUrl.protocol !== "http:" ||
-  targetUrl.port !== "8001" ||
+  targetUrl.port !== "8002" ||
   !["127.0.0.1", "localhost", "[::1]"].includes(targetUrl.hostname) ||
   targetUrl.pathname !== "/" ||
   targetUrl.search !== "" ||
   targetUrl.hash !== ""
 ) {
-  throw new Error("Playwright requires EKIP_API_PROXY_TARGET to be a loopback URL on port 8001.");
+  throw new Error("Playwright requires EKIP_API_PROXY_TARGET to be a loopback URL on port 8002.");
 }
 
 const frontendUrl = "http://127.0.0.1:4173";

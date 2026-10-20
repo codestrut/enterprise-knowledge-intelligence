@@ -384,28 +384,6 @@ def test_postgres_refresh_racing_family_logout_leaves_no_active_tokens(
                     secrets.token_urlsafe(32),
                 )
 
-# EKIP Task 05.3: refresh-family lock regression tests
-#
-# Append to tests/integration/test_auth_postgres.py, after the existing
-# pg_engine_bounded fixture. Add `revoke_refresh_session` to the existing
-# `from src.auth.service import (...)` block. Everything else used here is
-# already imported in that file.
-#
-# Before the family lock patch, the two race tests fail. On a scratch
-# PostgreSQL 16, the two-old-tokens case deadlocked (40P01) in 45 of 50
-# repetitions, and the stolen-token case left a live token in 48 of 50.
-# After the patch, both pass.
-#
-# Also strengthen the existing
-# test_postgres_refresh_racing_family_logout_leaves_no_active_tokens by adding,
-# after its final records check (inside the loop):
-#
-#        if refresh_outcome[0] == "refreshed":
-#            with Session(engine) as db, pytest.raises(AuthenticationError):
-#                rotate_refresh_session(
-#                    db, refresh_outcome[1].refresh_token, secrets.token_urlsafe(32)
-#                )
-
 _FAMILY_RACE_REPETITIONS = 50
 _RACE_PASSWORD = "violet-cactus-orbit-sailed"
 
