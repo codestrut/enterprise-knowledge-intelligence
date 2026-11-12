@@ -64,11 +64,16 @@ def _b64decode(value: str) -> bytes:
     if not _TOKEN_PART_RE.fullmatch(value):
         raise AccessTokenError("Invalid access token.")
     try:
-        return base64.b64decode(
+        decoded = base64.b64decode(
             value + "=" * (-len(value) % 4), altchars=b"-_", validate=True
         )
     except (binascii.Error, ValueError):
         raise AccessTokenError("Invalid access token.") from None
+    # Reject alternate encodings that differ only in unused trailing pad bits.
+    # Without this check, a textually modified token can decode to the same bytes.
+    if _b64encode(decoded) != value:
+        raise AccessTokenError("Invalid access token.")
+    return decoded
 
 
 def issue_access_token(

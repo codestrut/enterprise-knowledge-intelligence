@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from src.auth.access_tokens import AccessTokenError, decode_access_token
 from src.auth.database import database_url_from_environment
-from src.auth.models import Organisation, OrganisationMembership, RefreshSessionRecord, User
+from src.auth.models import Organisation, OrganisationMembership, OrganisationSettings, RefreshSessionRecord, TenantOnboarding, User
 from src.auth.permissions import Permission
 from src.auth.service import AuthenticatedPrincipal
 
@@ -94,6 +94,46 @@ def get_authenticated_context(
 
 
 def _revalidate_against_database(db: Session, claims) -> AuthenticatedContext:
+    now = datetime.now(UTC)
+
+    # Check for independent platform administrator session
+    if claims.membership_id == UUID(int=0) or claims.organisation_id == UUID(int=0):
+        user = db.get(User, claims.user_id)
+        if user is None or not user.is_active:
+            raise _unauthorized()
+        from src.auth.models import PlatformRoleAssignment
+        from src.auth.permissions import Role
+        has_platform = user.is_platform_admin or db.scalar(
+            select(PlatformRoleAssignment.id).where(PlatformRoleAssignment.user_id == user.id).limit(1)
+        ) is not None
+        if not has_platform:
+            raise _unauthorized()
+
+        active_family = db.scalar(
+            select(RefreshSessionRecord.id)
+            .where(
+                RefreshSessionRecord.family_id == claims.family_id,
+                RefreshSessionRecord.user_id == claims.user_id,
+                RefreshSessionRecord.membership_id.is_(None),
+                RefreshSessionRecord.revoked_at.is_(None),
+                RefreshSessionRecord.expires_at > now,
+                RefreshSessionRecord.family_expires_at > now,
+                RefreshSessionRecord.last_used_at > now - timedelta(days=7),
+            )
+            .limit(1)
+        )
+        if active_family is None:
+            raise _unauthorized()
+
+        principal = AuthenticatedPrincipal(
+            user_id=user.id,
+            membership_id=UUID(int=0),
+            organisation_id=UUID(int=0),
+            role=Role.READER,
+            permissions=frozenset(),
+        )
+        return AuthenticatedContext(principal, claims.family_id)
+
     scope = db.execute(
         select(User, OrganisationMembership, Organisation)
         .join(OrganisationMembership, OrganisationMembership.user_id == User.id)
@@ -108,9 +148,30 @@ def _revalidate_against_database(db: Session, claims) -> AuthenticatedContext:
         )
     ).first()
     if scope is None:
+        org = db.get(Organisation, claims.organisation_id)
+        if org is not None and not org.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tenant organisation is suspended.",
+            )
         raise _unauthorized()
     user, membership, organisation = scope
-    now = datetime.now(UTC)
+    onboarding_status = db.scalar(
+        select(TenantOnboarding.status).where(
+            TenantOnboarding.organisation_id == organisation.id
+        )
+    )
+    if onboarding_status is not None and onboarding_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant organisation is suspended or not active.",
+        )
+    idle_minutes = db.scalar(
+        select(OrganisationSettings.session_idle_timeout_minutes).where(
+            OrganisationSettings.organisation_id == organisation.id
+        )
+    )
+    idle_timeout = timedelta(minutes=int(idle_minutes)) if idle_minutes is not None else timedelta(days=7)
     active_family = db.scalar(
         select(RefreshSessionRecord.id)
         .where(
@@ -120,7 +181,7 @@ def _revalidate_against_database(db: Session, claims) -> AuthenticatedContext:
             RefreshSessionRecord.revoked_at.is_(None),
             RefreshSessionRecord.expires_at > now,
             RefreshSessionRecord.family_expires_at > now,
-            RefreshSessionRecord.last_used_at > now - timedelta(days=7),
+            RefreshSessionRecord.last_used_at > now - idle_timeout,
         )
         .limit(1)
     )

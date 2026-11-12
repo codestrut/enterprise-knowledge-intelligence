@@ -167,3 +167,53 @@ def test_expensive_reranker_and_grounder_are_lazily_shared():
     assert grounder.evaluate("claim-a") == ("claim-a", "grounder")
     assert grounder.evaluate("claim-b") == ("claim-b", "grounder")
     assert created == {"reranker": 1, "grounder": 1}
+
+
+def test_shared_grounding_evaluator_delegates_predecomposed_evaluation():
+    created = {"count": 0}
+    calls = []
+
+    class Evaluator:
+        def evaluate(self, *args, **kwargs):
+            calls.append(("evaluate", args, kwargs))
+            return "regular"
+
+        def evaluate_predecomposed(self, *args, **kwargs):
+            calls.append(("predecomposed", args, kwargs))
+            return "predecomposed"
+
+    def factory():
+        created["count"] += 1
+        return Evaluator()
+
+    shared = SharedGroundingEvaluator(factory)
+
+    assert shared.evaluate_predecomposed("answer", {"1": 0}, []) == "predecomposed"
+    assert shared.evaluate_predecomposed("answer-2", {"2": 1}, []) == "predecomposed"
+    assert shared.evaluate("regular-answer") == "regular"
+
+    assert created["count"] == 1
+    assert [call[0] for call in calls] == [
+        "predecomposed",
+        "predecomposed",
+        "evaluate",
+    ]
+
+
+def test_shared_grounding_evaluator_predecomposed_falls_back_for_legacy_evaluator():
+    created = {"count": 0}
+
+    class LegacyEvaluator:
+        def evaluate(self, *args, **kwargs):
+            return ("legacy", args, kwargs)
+
+    def factory():
+        created["count"] += 1
+        return LegacyEvaluator()
+
+    shared = SharedGroundingEvaluator(factory)
+
+    result = shared.evaluate_predecomposed("answer", {"1": 0}, [])
+
+    assert result == ("legacy", ("answer", {"1": 0}, []), {})
+    assert created["count"] == 1

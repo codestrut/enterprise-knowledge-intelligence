@@ -92,8 +92,13 @@ def api_environment(monkeypatch, tmp_path):
     knowledge_base_module.KnowledgeBase = FakeKnowledgeBase
     rag_pipeline_module = types.ModuleType("src.rag_pipeline")
     rag_pipeline_module.RAGPipeline = FakePipeline
+    grounding_module = types.ModuleType("src.generation.grounding_evaluator")
+    grounding_module.GroundingEvaluator = type(
+        "GroundingEvaluator", (), {"__init__": lambda self, *args, **kwargs: None}
+    )
     monkeypatch.setitem(sys.modules, "src.knowledge_base", knowledge_base_module)
     monkeypatch.setitem(sys.modules, "src.rag_pipeline", rag_pipeline_module)
+    monkeypatch.setitem(sys.modules, "src.generation.grounding_evaluator", grounding_module)
     sys.modules.pop("src.api.main", None)
     api = importlib.import_module("src.api.main")
 
@@ -166,19 +171,48 @@ def api_environment(monkeypatch, tmp_path):
     sys.modules.pop("src.api.main", None)
 
 
-def login(environment, email, *, organisation_id=None):
-    body = {"email": email, "password": VALID_PASSWORD}
+def login(
+    environment,
+    email,
+    *,
+    organisation_id=None,
+    auth_scope="tenant",
+):
+    body = {
+        "email": email,
+        "password": VALID_PASSWORD,
+        "auth_scope": auth_scope,
+    }
+
     if organisation_id is not None:
         body["organisation_id"] = str(organisation_id)
-    response = environment["client"].post("/auth/login", json=body)
+
+    response = environment["client"].post(
+        "/auth/login",
+        json=body,
+    )
     assert response.status_code == 200, response.text
     return response.json()
 
 
-def auth_headers(environment, email, *, organisation_id=None):
-    result = login(environment, email, organisation_id=organisation_id)
+def auth_headers(
+    environment,
+    email,
+    *,
+    organisation_id=None,
+    auth_scope="tenant",
+):
+    result = login(
+        environment,
+        email,
+        organisation_id=organisation_id,
+        auth_scope=auth_scope,
+    )
     assert "access_token" in result
-    return {"Authorization": f"Bearer {result['access_token']}"}, result
+
+    return {
+        "Authorization": f"Bearer {result['access_token']}"
+    }, result
 
 
 def test_health_is_minimal_public_and_sensitive_routes_require_auth(api_environment):
@@ -238,8 +272,13 @@ def test_current_user_profile_is_derived_from_authenticated_membership(api_envir
         },
         "role": Role.ORGANISATION_ADMINISTRATOR.value,
         "permissions": sorted(permission.value for permission in permissions_for_role(Role.ORGANISATION_ADMINISTRATOR)),
+        "platform_permissions": [],
+        "platform_roles": [],
     }
-    assert set(profile) == {"email", "organisation", "role", "permissions"}
+    assert set(profile) == {
+        "email", "organisation", "role", "permissions",
+        "platform_permissions", "platform_roles"
+    }
     assert "password_hash" not in profile and "access_token" not in profile and "refresh_token" not in profile
 
 
@@ -267,7 +306,8 @@ def test_bad_credentials_and_tampered_access_token_are_401(api_environment):
         assert "incorrect" not in str(failed_event.details)
     headers, _result = auth_headers(api_environment, "admin-a@example.test")
     body, signature = headers["Authorization"].split(" ", 1)[1].split(".")
-    headers["Authorization"] = f"Bearer {body}.{signature[:-1]}A"
+    tampered_signature = ("A" if signature[0] != "A" else "B") + signature[1:]
+    headers["Authorization"] = f"Bearer {body}.{tampered_signature}"
     assert client.get("/documents", headers=headers).status_code == 401
 
 
@@ -282,8 +322,10 @@ def test_readers_cannot_upload_or_delete_and_platform_admin_has_no_extra_tenant_
     platform_reader, _ = auth_headers(api_environment, "platform-reader@example.test")
     assert client.post("/documents", files={"file": ("p.pdf", b"%PDF-test", "application/pdf")}, headers=platform_reader).status_code == 403
     assert client.get("/documents", headers=platform_reader).status_code == 200
-    no_tenant = client.post("/auth/login", json={"email": "platform-only@example.test", "password": VALID_PASSWORD})
-    assert no_tenant.status_code == 401
+    platform_only = client.post("/auth/login", json={"email": "platform-only@example.test", "password": VALID_PASSWORD})
+    assert platform_only.status_code == 200
+    assert platform_only.json()["organisation_id"] is None
+    assert platform_only.json()["permissions"] == []
 
 
 def test_membership_permission_bundle_denies_tenant_administration_to_contributors(api_environment):
@@ -510,8 +552,13 @@ def _reload_api_module(monkeypatch):
     knowledge_base_module.KnowledgeBase = FakeKnowledgeBase
     rag_pipeline_module = types.ModuleType("src.rag_pipeline")
     rag_pipeline_module.RAGPipeline = FakePipeline
+    grounding_module = types.ModuleType("src.generation.grounding_evaluator")
+    grounding_module.GroundingEvaluator = type(
+        "GroundingEvaluator", (), {"__init__": lambda self, *args, **kwargs: None}
+    )
     monkeypatch.setitem(sys.modules, "src.knowledge_base", knowledge_base_module)
     monkeypatch.setitem(sys.modules, "src.rag_pipeline", rag_pipeline_module)
+    monkeypatch.setitem(sys.modules, "src.generation.grounding_evaluator", grounding_module)
     sys.modules.pop("src.api.main", None)
     return importlib.import_module("src.api.main")
 
@@ -750,3 +797,197 @@ def test_refresh_failures_are_throttled_but_same_key_retries_are_not(api_environ
     ]
     assert [response.status_code for response in invalid] == [401] * 10 + [429]
     assert invalid[-1].json() == {"detail": "Too many sign-in attempts. Try again later."}
+
+
+def test_platform_organisation_list_allows_platform_admin(api_environment):
+    headers, _result = auth_headers(
+        api_environment,
+        "platform-reader@example.test",
+        auth_scope="platform",
+    )
+
+    response = api_environment["client"].get(
+        "/platform/organisations",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "organisations" in body
+    assert "count" in body
+
+
+def test_platform_organisation_list_denies_ordinary_tenant_admin(api_environment):
+    headers, _result = auth_headers(api_environment, "admin-a@example.test")
+
+    response = api_environment["client"].get(
+        "/platform/organisations",
+        headers=headers,
+    )
+
+    assert response.status_code == 403, response.text
+
+
+def test_platform_tenant_creation_starts_pending_approval(api_environment):
+    headers, _result = auth_headers(
+        api_environment,
+        "platform-reader@example.test",
+        auth_scope="platform",
+    )
+    headers["Idempotency-Key"] = "task06-api-test-tenant-create-001"
+
+    response = api_environment["client"].post(
+        "/platform/organisations",
+        headers=headers,
+        json={
+            "name": "Task06 API Test Organisation",
+            "slug": "task06-api-test-org",
+            "initial_admin_email": "owner-task06@example.test",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["slug"] == "task06-api-test-org"
+    assert body["status"] == "registration_pending"
+    assert body["normal_access_enabled"] is False
+    assert body["provisioning_attempts"] == 0
+
+
+def test_platform_tenant_creation_requires_idempotency_key(api_environment):
+    headers, _result = auth_headers(
+        api_environment,
+        "platform-reader@example.test",
+        auth_scope="platform",
+    )
+
+    response = api_environment["client"].post(
+        "/platform/organisations",
+        headers=headers,
+        json={
+            "name": "Missing Key Test Organisation",
+            "slug": "missing-key-test-org",
+            "initial_admin_email": "owner-missing-key@example.test",
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert "Idempotency-Key" in response.text
+
+
+def test_ordinary_tenant_admin_cannot_assign_platform_role(api_environment):
+    headers, _result = auth_headers(api_environment, "admin-a@example.test")
+    target_user_id = str(
+        api_environment["identities"]["reader-a@example.test"]["user"].id
+    )
+
+    response = api_environment["client"].post(
+        "/platform/users/roles",
+        headers=headers,
+        json={
+            "user_id": target_user_id,
+            "role": "platform_tenant_creator",
+        },
+    )
+
+    assert response.status_code == 403, response.text
+
+
+def test_platform_role_assignment_is_audited_and_idempotent(api_environment):
+    from sqlalchemy import select
+    from src.auth.models import AuditEvent, PlatformRoleAssignment
+
+    headers, _result = auth_headers(
+        api_environment,
+        "platform-reader@example.test",
+        auth_scope="platform",
+    )
+    target_user_id = str(
+        api_environment["identities"]["reader-a@example.test"]["user"].id
+    )
+    payload = {
+        "user_id": target_user_id,
+        "role": "platform_tenant_creator",
+    }
+
+    first = api_environment["client"].post(
+        "/platform/users/roles", headers=headers, json=payload
+    )
+    assert first.status_code == 201, first.text
+    assert first.json()["already_assigned"] is False
+
+    second = api_environment["client"].post(
+        "/platform/users/roles", headers=headers, json=payload
+    )
+    assert second.status_code == 201, second.text
+    assert second.json()["already_assigned"] is True
+
+    with Session(api_environment["engine"]) as db:
+        assignments = db.scalars(
+            select(PlatformRoleAssignment).where(
+                PlatformRoleAssignment.user_id
+                == api_environment["identities"]["reader-a@example.test"]["user"].id,
+                PlatformRoleAssignment.role == "platform_tenant_creator",
+            )
+        ).all()
+        audit_events = db.scalars(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "platform_role_assigned",
+                AuditEvent.target_id == target_user_id,
+            )
+        ).all()
+
+    assert len(assignments) == 1
+    assert len(audit_events) == 1
+
+
+
+def test_platform_user_search_returns_minimal_identity(api_environment):
+    headers, _result = auth_headers(
+        api_environment,
+        "platform-reader@example.test",
+        auth_scope="platform",
+    )
+    target = api_environment["identities"]["reader-a@example.test"]["user"]
+
+    response = api_environment["client"].get(
+        "/platform/users",
+        params={"q": "reader-a"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["count"] == 1
+    assert body["users"] == [{
+        "id": str(target.id),
+        "email": "reader-a@example.test",
+        "is_active": True,
+    }]
+    assert "password_hash" not in response.text
+
+
+def test_platform_user_search_denies_ordinary_tenant_admin(api_environment):
+    headers, _result = auth_headers(api_environment, "admin-a@example.test")
+
+    response = api_environment["client"].get(
+        "/platform/users",
+        params={"q": "reader"},
+        headers=headers,
+    )
+
+    assert response.status_code == 403, response.text
+
+
+def test_platform_user_search_requires_a_valid_query(api_environment):
+    headers, _result = auth_headers(
+        api_environment, "platform-reader@example.test"
+    )
+
+    response = api_environment["client"].get(
+        "/platform/users",
+        params={"q": " "},
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text

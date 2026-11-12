@@ -1,0 +1,143 @@
+EKIP TASK 06 — ENVIRONMENT & DEPENDENCY CHECK
+Timestamp: 2026-10-29 14:54:31 WAT
+Host: Live
+Report: /Users/joseph/enterprise-knowledge-intelligence/docs/task-06/environment-check-20261029-145431/environment-report.txt
+Policy: check first; skip satisfied dependencies; ask before installation.
+No sudo, destructive Git actions, process killing, migrations, or production API calls.
+
+
+========== 1. Operating system and base tools ==========
+ProductName:		macOS
+ProductVersion:		26.3.1
+BuildVersion:		25D2128
+[OK] git: /usr/bin/git
+git version 2.50.1 (Apple Git-155)
+[OK] node: /usr/local/bin/node
+v24.22.0
+[OK] npm: /usr/local/bin/npm
+11.19.1
+[OK] npx: /usr/local/bin/npx
+[OK] python3: /Library/Frameworks/Python.framework/Versions/3.13/bin/python3
+Python 3.13.0
+
+
+========== 2. Repository state ==========
+Repository: /Users/joseph/enterprise-knowledge-intelligence
+Branch: feature/organisation-knowledge-management
+Working tree:
+ M frontend/src/App.test.tsx
+ M frontend/src/App.tsx
+ M frontend/src/AppShell.tsx
+ M frontend/src/AuthContext.tsx
+ M frontend/src/DocumentLibrary.test.tsx
+ M frontend/src/DocumentLibrary.tsx
+ M frontend/src/Icons.tsx
+ M frontend/src/Workspace.test.tsx
+ M frontend/src/Workspace.tsx
+ M frontend/src/api/client.test.ts
+ M frontend/src/api/client.ts
+ M frontend/src/api/types.ts
+ M frontend/src/styles.css
+ M src/api/main.py
+ M src/auth/models.py
+ M src/auth/permissions.py
+ M tests/api/test_api_acceptance.py
+ M tests/integration/test_auth_postgres.py
+ M tests/unit/test_auth_migration.py
+ M tests/unit/test_auth_permissions.py
+?? Dockerfile.task05-runa
+?? EKIP_Task06_Audit_Run.sh
+?? EKIP_Task06_Environment_Check.sh
+?? data/
+?? docs/task-06/
+?? ekip_family_lock_service.patch
+?? ekip_family_lock_tests.py
+?? frontend/TASK06_BROWSER_SMOKE.md
+?? frontend/e2e/smoke.spec.spec.ts.before-audit-fix.bak
+?? frontend/e2e/task06-platform.smoke.spec.ts
+?? frontend/playwright.task06-smoke.config.ts
+?? frontend/src/App.tsx.before-platform-title-fix.bak
+?? frontend/src/PlatformAdmin.test.tsx
+?? frontend/src/PlatformAdmin.tsx
+?? frontend/vite.platform-smoke.config.ts
+?? migrations/versions/0005_tenant_onboarding.py
+?? migrations/versions/0006_platform_roles_and_recovery.py
+?? scripts/run_isolated_test_api.sh
+?? scripts/task06_presentation_rehearsal.sh
+?? scripts/task06_smoke_mock_api.py
+?? scripts/test_postgres_integration.sh
+?? src/api/task06_contracts.py
+?? src/auth/dependencies.py.task053.bak
+?? src/auth/tenant_lifecycle.py
+?? src/auth/tenant_onboarding.py
+?? test-results/
+?? tests/integration/test_auth_postgres.py.task053-race-assertion.bak
+?? tests/integration/test_auth_postgres.py.task053.bak
+?? tests/unit/test_task06_contracts.py
+?? tests/unit/test_task06_tenant_lifecycle.py
+?? tests/unit/test_task06_tenant_onboarding_service.py
+
+
+========== 3. Node dependencies ==========
+Found frontend/package.json
+[OK] frontend/node_modules exists
+[OK] Local Playwright CLI exists
+Version 1.64.1
+
+
+========== 4. Playwright browser availability ==========
+
+Playwright version: 1.64.1
+  Browsers:
+    /Users/joseph/Library/Caches/ms-playwright/chromium-1248
+    /Users/joseph/Library/Caches/ms-playwright/chromium_headless_shell-1248
+    /Users/joseph/Library/Caches/ms-playwright/ffmpeg-1013
+  References:
+    /Users/joseph/enterprise-knowledge-intelligence/frontend/node_modules/playwright-core
+
+If Chromium is missing, the project-scoped command is:
+  cd "/Users/joseph/enterprise-knowledge-intelligence/frontend" && npx playwright install chromium
+If Chromium is missing, install Playwright Chromium now? (y/N): 
+
+========== 5. Python and backend dependency discovery ==========
+Python 3.13.0
+
+--- Python project directory: /Users/joseph/enterprise-knowledge-intelligence ---
+[FOUND] Dependency/project manifest: /Users/joseph/enterprise-knowledge-intelligence/requirements.txt
+[OK] Python environment detected: /Users/joseph/enterprise-knowledge-intelligence/.venv/bin/python
+Python 3.12.7
+pip 26.2.1 from /Users/joseph/enterprise-knowledge-intelligence/.venv/lib/python3.12/site-packages/pip (python 3.12)
+Installed package consistency check:
+No broken requirements found.
+Key backend module checks:
+fastapi: installed
+uvicorn: installed
+pytest: installed
+httpx: installed
+sqlalchemy: installed
+pydantic: installed
+[REVIEW] No backend/ directory found at /Users/joseph/enterprise-knowledge-intelligence/backend; backend dependency checks were limited to the repository root.
+
+
+========== 6. Test ports ==========
+--- PORT 5174 ---
+[OK] Port 5174 is free
+--- PORT 8003 ---
+[OK] Port 8003 is free
+
+
+========== 7. Playwright test discovery (non-destructive) ==========
+Listing tests:
+  task06-platform.smoke.spec.ts:12:1 › platform tenant directory loads synthetic lifecycle states through the loopback proxy
+  task06-platform.smoke.spec.ts:45:1 › platform operator can create a pending registration, search a user, and assign a role
+  task06-platform.smoke.spec.ts:74:1 › platform operator can approve, recover, and retry without activating tenants
+Total: 3 tests in 1 file
+
+
+========== 8. Summary ==========
+This report records detected environment state and installation attempts.
+A missing tool is not automatically a failure if it is not needed for the selected task.
+No automatic installation of Xcode Command Line Tools, Homebrew, Node, Python, or global packages is attempted.
+Backend discovery checks common manifests and local virtual environments; non-requirements manifests are reported for a deliberate package-manager-specific decision.
+Finished: 2026-10-29 14:55:03 WAT
+Report saved to: /Users/joseph/enterprise-knowledge-intelligence/docs/task-06/environment-check-20261029-145431/environment-report.txt

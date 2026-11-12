@@ -21,3 +21,10 @@ frontend/node_modules/
 frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
+
+# EKIP local tenant runtime state
+/data/tenants/
+
+# Root-level generated tooling artifacts
+/node_modules/
+/test-results/

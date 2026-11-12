@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "suite_id": "ekip-cross-domain-grounding-smoke-v1",
+  "description": "Document-independent diagnostic suite of claim/evidence relations across six domains. These are synthetic smoke cases for testing the benchmark harness and NLI behavior, not evidence of production generalization. Do not tune model thresholds solely on this suite.",
+  "grounder_model": "cross-encoder/nli-deberta-v3-base",
+  "grounding_cases": [
+    {
+      "id": "hr_leave_supported",
+      "domain": "human_resources",
+      "document_type": "policy passage",
+      "evidence": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "claim": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "expected_label": "entailment",
+      "rationale": "The claim repeats the stated policy fact.",
+      "split": "held_out",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "hr_leave_conflict",
+      "domain": "human_resources",
+      "document_type": "policy passage",
+      "evidence": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "claim": "Eligible employees may request up to 5 paid annual leave days per calendar year.",
+      "expected_label": "contradiction",
+      "rationale": "The same policy subject and attribute have incompatible numeric values.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "hr_transport_unrelated",
+      "domain": "human_resources",
+      "document_type": "policy passage",
+      "evidence": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "claim": "Eligible employees receive a monthly transport allowance.",
+      "expected_label": "neutral",
+      "rationale": "The evidence is silent about transport allowances; silence is not contradiction.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "finance_deadline_supported",
+      "domain": "finance",
+      "document_type": "procedure passage",
+      "evidence": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "claim": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "expected_label": "entailment",
+      "rationale": "The claim repeats the stated submission deadline.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "finance_deadline_conflict",
+      "domain": "finance",
+      "document_type": "procedure passage",
+      "evidence": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "claim": "Expense claims must be submitted within 10 calendar days of the purchase.",
+      "expected_label": "contradiction",
+      "rationale": "The same deadline has incompatible numeric values.",
+      "split": "held_out",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "finance_fire_training_unrelated",
+      "domain": "finance",
+      "document_type": "procedure passage",
+      "evidence": "Expense claims must be submitted within 30 calendar days of the purchase.",
+      "claim": "All new employees must complete fire-safety training.",
+      "expected_label": "neutral",
+      "rationale": "The evidence does not discuss fire-safety training.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "it_acknowledgement_supported",
+      "domain": "it_operations",
+      "document_type": "incident runbook passage",
+      "evidence": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "claim": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "expected_label": "entailment",
+      "rationale": "The claim repeats the incident-response service target.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "it_acknowledgement_conflict",
+      "domain": "it_operations",
+      "document_type": "incident runbook passage",
+      "evidence": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "claim": "Critical incidents must be acknowledged within 60 minutes of detection.",
+      "expected_label": "contradiction",
+      "rationale": "The same acknowledgement target has incompatible numeric values.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "it_leave_unrelated",
+      "domain": "it_operations",
+      "document_type": "incident runbook passage",
+      "evidence": "Critical incidents must be acknowledged within 15 minutes of detection.",
+      "claim": "Eligible employees may request up to 20 paid annual leave days per calendar year.",
+      "expected_label": "neutral",
+      "rationale": "Incident handling evidence says nothing about annual leave.",
+      "split": "held_out",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "procurement_certificate_supported",
+      "domain": "procurement",
+      "document_type": "supplier procedure passage",
+      "evidence": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "claim": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "expected_label": "entailment",
+      "rationale": "The claim repeats the supplier prerequisite.",
+      "split": "held_out",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "procurement_certificate_conflict",
+      "domain": "procurement",
+      "document_type": "supplier procedure passage",
+      "evidence": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "claim": "Suppliers do not need a tax-clearance certificate before a contract is awarded.",
+      "expected_label": "contradiction",
+      "rationale": "The claim explicitly negates a stated prerequisite.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "procurement_leave_unrelated",
+      "domain": "procurement",
+      "document_type": "supplier procedure passage",
+      "evidence": "Suppliers must provide a valid tax-clearance certificate before a contract is awarded.",
+      "claim": "Employees may carry unused annual leave into the next year.",
+      "expected_label": "neutral",
+      "rationale": "The supplier prerequisite says nothing about employee leave carry-over.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "product_voltage_supported",
+      "domain": "product_manual",
+      "document_type": "manual passage",
+      "evidence": "The gateway operates with a 12V DC power adapter.",
+      "claim": "The gateway operates with a 12V DC power adapter.",
+      "expected_label": "entailment",
+      "rationale": "The claim repeats the stated power requirement.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "product_voltage_conflict",
+      "domain": "product_manual",
+      "document_type": "manual passage",
+      "evidence": "The gateway operates with a 12V DC power adapter.",
+      "claim": "The gateway operates with a 24V DC power adapter.",
+      "expected_label": "contradiction",
+      "rationale": "The same hardware's stated input voltage differs.",
+      "split": "held_out",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "product_warranty_unrelated",
+      "domain": "product_manual",
+      "document_type": "manual passage",
+      "evidence": "The gateway operates with a 12V DC power adapter.",
+      "claim": "The warranty covers accidental screen damage for five years.",
+      "expected_label": "neutral",
+      "rationale": "The power specification says nothing about warranty coverage.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "records_retention_supported",
+      "domain": "records_management",
+      "document_type": "retention policy passage",
+      "evidence": "Completed procurement records must be retained for seven years after contract closure.",
+      "claim": "Completed procurement records must be retained for seven years after contract closure.",
+      "expected_label": "entailment",
+      "rationale": "The claim repeats the records-retention rule.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "records_retention_conflict",
+      "domain": "records_management",
+      "document_type": "retention policy passage",
+      "evidence": "Completed procurement records must be retained for seven years after contract closure.",
+      "claim": "Completed procurement records must be retained for three years after contract closure.",
+      "expected_label": "contradiction",
+      "rationale": "The same retention requirement has incompatible durations.",
+      "split": "calibration",
+      "document_format": "text_pair"
+    },
+    {
+      "id": "records_fire_unrelated",
+      "domain": "records_management",
+      "document_type": "retention policy passage",
+      "evidence": "Completed procurement records must be retained for seven years after contract closure.",
+      "claim": "The building fire alarm must be tested every month.",
+      "expected_label": "neutral",
+      "rationale": "The retention policy does not address building fire alarms.",
+      "split": "held_out",
+      "document_format": "text_pair"
+    }
+  ],
+  "corpora": [],
+  "query_cases": [],
+  "notes": [
+    "Synthetic, manually labelled smoke cases cover six domains and all three NLI relations.",
+    "The held_out split is for diagnostic separation; six cases are not statistically sufficient for a production generalization claim.",
+    "No raw PDF, DOCX, PPTX, XLSX, HTML, CSV, image or email parsing is exercised by this text-pair suite.",
+    "Add independently labelled real-corpus query suites and raw-format fixtures before claiming document-format independence."
+  ]
+}

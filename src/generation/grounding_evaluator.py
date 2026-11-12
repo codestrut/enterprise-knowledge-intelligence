@@ -143,7 +143,21 @@ class GroundingEvaluator:
             and overlap_ratio >= cls.MIN_CONTENT_OVERLAP_RATIO
         )
 
-    def evaluate(self, answer, source_map, source_documents):
+    def evaluate_predecomposed(self, answer, source_map, source_documents):
+        """Independently ground claims that have already been decomposed.
+
+        This dedicated entry point preserves the original three-argument
+        evaluate() interface for injected evaluators while avoiding a second
+        decomposition of grounded-subset candidates.
+        """
+        return self.evaluate(
+            answer,
+            source_map,
+            source_documents,
+            decompose_claims=False,
+        )
+
+    def evaluate(self, answer, source_map, source_documents, *, decompose_claims=True):
         """Evaluate and classify every cited answer claim."""
 
         claims = parse_claims(answer)
@@ -171,15 +185,21 @@ class GroundingEvaluator:
             atomic_evaluations = []
 
             claim_context = claim_data.get("context")
-            if claim_context:
-                atomic_claims = self.claim_decomposer.decompose(
-                    original_claim,
-                    context=claim_context,
-                )
+            if decompose_claims:
+                if claim_context:
+                    atomic_claims = self.claim_decomposer.decompose(
+                        original_claim,
+                        context=claim_context,
+                    )
+                else:
+                    atomic_claims = self.claim_decomposer.decompose(
+                        original_claim
+                    )
             else:
-                atomic_claims = self.claim_decomposer.decompose(
-                    original_claim
-                )
+                # Grounded-subset candidates are already atomic claims
+                # approved by an earlier evaluation. Do not decompose them
+                # again; still run evidence selection and semantic grounding.
+                atomic_claims = [original_claim]
 
             for atomic_claim in atomic_claims:
                 claim_evidence = []

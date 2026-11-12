@@ -19,7 +19,7 @@ from typing import Any, Callable, Mapping, Protocol
 
 
 ALLOWED_RELATIONS = {"entailment", "contradiction", "neutral"}
-ALLOWED_GROUNDING_STATUSES = {"grounded", "unsupported", "contradicted"}
+ALLOWED_GROUNDING_STATUSES = {"grounded", "unsupported", "contradicted", "uncited"}
 UNKNOWN_GROUNDING_STATUS = "unknown"
 ALLOWED_SPLITS = {"calibration", "validation", "held_out", "test", "unspecified"}
 ACCEPTANCE_GATE_OPERATORS = {
@@ -286,6 +286,9 @@ def _summarize_query_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "contradicted_claim_rate": _safe_rate(
             total_claims_by_status["contradicted"], total_claims
         ),
+        "uncited_claim_rate": _safe_rate(
+            total_claims_by_status["uncited"], total_claims
+        ),
         "fully_grounded_answer_rate_answerable": _safe_rate(
             sum(case["fully_grounded"] for case in answerable), len(answerable)
         ),
@@ -543,6 +546,11 @@ def run_grounding_benchmark(
             if isinstance(probabilities, Mapping)
             else None
         )
+        raw_confidence = (
+            probabilities.get(raw_predicted)
+            if isinstance(probabilities, Mapping)
+            else None
+        )
         case_results.append({
             "case_id": case["id"],
             "domain": case["domain"],
@@ -561,6 +569,8 @@ def run_grounding_benchmark(
             "support_guard_ordered_coverage": support_guard.get("ordered_coverage"),
             "support_guard_protected_markers_match": support_guard.get("protected_markers_match"),
             "correct": predicted == expected,
+            "raw_model_confidence": raw_confidence,
+            "effective_label_probability": confidence,
             "predicted_label_confidence": confidence,
             "probabilities": dict(probabilities) if isinstance(probabilities, Mapping) else {},
             "claim": case["claim"],
@@ -571,6 +581,15 @@ def run_grounding_benchmark(
     confusion: dict[str, Counter[str]] = defaultdict(Counter)
     for item in case_results:
         confusion[item["expected_label"]][item["predicted_label"]] += 1
+
+    raw_case_results = [
+        {
+            **item,
+            "predicted_label": item["raw_predicted_label"],
+            "correct": item["raw_predicted_label"] == item["expected_label"],
+        }
+        for item in case_results
+    ]
 
     return {
         "schema_version": 1,
@@ -590,6 +609,7 @@ def run_grounding_benchmark(
         "run_type": "grounding",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "metrics": _classification_metrics(case_results),
+        "raw_metrics": _classification_metrics(raw_case_results),
         "confusion_matrix": {
             expected: {
                 predicted: confusion.get(expected, Counter())[predicted]

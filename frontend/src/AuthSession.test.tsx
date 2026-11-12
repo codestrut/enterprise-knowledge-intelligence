@@ -134,6 +134,41 @@ describe("F4: fixed sign-in error text", () => {
   });
 });
 
+describe("Platform-only operator sign-in", () => {
+  it("uses the explicit platform scope and routes to Platform Admin without tenant navigation", async () => {
+    window.history.replaceState({}, "", "/");
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchMock = vi.fn((url: string, init: RequestInit = {}) => {
+      calls.push({ url, init });
+      if (url === "/api/auth/me" && bearer(init) === "Bearer platform-token") {
+        return Promise.resolve(json({ email: "platform@example.test", organisation: null, role: "reader", permissions: [], platform_permissions: ["organisations:read"], platform_roles: ["platform_super_administrator"] }));
+      }
+      if (url === "/api/auth/me") return Promise.resolve(json({ detail: "Authentication is required." }, 401));
+      if (url === "/api/auth/login") {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        expect(body.auth_scope).toBe("platform");
+        return Promise.resolve(json({ access_token: "platform-token", token_type: "bearer", expires_in: 600, refresh_token: "platform-refresh", organisation_id: null, role: "reader", permissions: [] }));
+      }
+      if (url === "/api/health") return Promise.resolve(json({ status: "ok", document_count: 0, chunk_count: 0 }));
+      if (url === "/api/platform/overview") return Promise.resolve(json({ total_tenants: 0, active_tenants: 0, pending_tenants: 0, provisioning_tenants: 0, failed_tenants: 0, suspended_tenants: 0, total_documents: 0, total_chunks: 0 }));
+      return Promise.resolve(json({ detail: "Unexpected request" }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App/>);
+    fireEvent.click(await screen.findByLabelText("Sign in as a platform operator"));
+    await submitSignIn("platform@example.test");
+    expect(await screen.findByRole("heading", { name: "Platform administration" })).toBeTruthy();
+    expect(screen.getAllByText("Super administrator").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Reader")).toBeNull();
+    expect(document.title).toBe("Platform Administration · EKIP");
+    expect(screen.getByRole("link", { name: /Platform admin/ })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Document library/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Workspace/ })).toBeNull();
+    expect(calls.some((call) => call.url === "/api/platform/overview")).toBe(true);
+    expect(calls.some((call) => call.url === "/api/documents" || call.url === "/api/query")).toBe(false);
+  });
+});
+
 describe("F3: multi-organisation sign-in", () => {
   function multiOrganisationFetch(loginBodies: Record<string, unknown>[], organisations: unknown[]) {
     return vi.fn((url: string, init: RequestInit = {}) => {
@@ -164,8 +199,8 @@ describe("F3: multi-organisation sign-in", () => {
     fireEvent.click(screen.getByRole("button", { name: /Sign in securely/ }));
     expect(await screen.findByRole("heading", { name: "Knowledge operations" })).toBeTruthy();
     expect(loginBodies).toEqual([
-      { email: "multi@example.test", password: PASSWORD },
-      { email: "multi@example.test", password: PASSWORD, organisation_id: "org-2" },
+      { email: "multi@example.test", password: PASSWORD, auth_scope: "tenant" },
+      { email: "multi@example.test", password: PASSWORD, organisation_id: "org-2", auth_scope: "tenant" },
     ]);
   });
 

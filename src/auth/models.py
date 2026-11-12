@@ -11,15 +11,17 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     JSON,
     String,
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
-from src.auth.permissions import Permission, Role, permissions_for_role
+from src.auth.permissions import Permission, Role, PlatformRole, permissions_for_role, permissions_for_platform_role
 
 
 class Base(DeclarativeBase):
@@ -170,6 +172,87 @@ class OrganisationMembership(Timestamped, Base):
         return f"OrganisationMembership(id={self.id!r}, role={self.role.value!r})"
 
 
+class TenantOnboarding(Timestamped, Base):
+    """Durable platform-led tenant provisioning state and idempotency record."""
+
+    __tablename__ = "tenant_onboarding"
+    __table_args__ = (
+        UniqueConstraint("organisation_id", name="uq_tenant_onboarding_organisation"),
+        UniqueConstraint("created_by_user_id", "idempotency_key", name="uq_tenant_onboarding_creator_idempotency"),
+        CheckConstraint(
+            "status IN ('registration_pending', 'provisioning', 'provisioning_failed', 'pending_admin', 'active', 'suspended', 'rejected')",
+            name="ck_tenant_onboarding_status",
+        ),
+        CheckConstraint("length(trim(initial_admin_email)) > 0", name="ck_tenant_onboarding_admin_email_nonempty"),
+        CheckConstraint("provisioning_attempts >= 0", name="ck_tenant_onboarding_attempts_nonnegative"),
+        Index("ix_tenant_onboarding_status_created", "status", "created_at"),
+        UniqueConstraint("initial_admin_invitation_id", name="uq_tenant_onboarding_initial_invitation"),
+        ForeignKeyConstraint(
+            ["organisation_id", "initial_admin_invitation_id"],
+            ["organisation_invitations.organisation_id", "organisation_invitations.id"],
+            name="fk_tenant_onboarding_initial_invitation_same_org",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "initial_admin_invitation_accepted_at IS NULL OR initial_admin_invitation_id IS NOT NULL",
+            name="ck_tenant_onboarding_acceptance_needs_invitation",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    organisation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("organisations.id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="registration_pending", server_default="registration_pending")
+    initial_admin_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by_user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    approved_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    provisioning_attempts: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
+    provisioning_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    provisioning_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    provisioning_error_code: Mapped[str | None] = mapped_column(String(100))
+    initial_admin_invitation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
+    initial_admin_invitation_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    organisation: Mapped[Organisation] = relationship()
+
+    @validates("initial_admin_email")
+    def normalize_initial_admin_email(self, _key: str, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Initial administrator email must not be empty.")
+        return value.strip().lower()
+
+
+class PlatformRoleAssignment(Timestamped, Base):
+    """Explicit user-scoped platform role assignment with auditable grantor."""
+
+    __tablename__ = "platform_role_assignments"
+    __table_args__ = (
+        UniqueConstraint("user_id", "role", name="uq_platform_role_assignment_user_role"),
+        CheckConstraint(
+            "role IN ('platform_super_administrator', 'platform_tenant_creator', 'platform_tenant_approver', 'platform_provisioning_operator')",
+            name="ck_platform_role_assignment_role",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    role: Mapped[PlatformRole] = mapped_column(String(48), nullable=False)
+    assigned_by_user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+    @property
+    def permissions(self):
+        return permissions_for_platform_role(self.role)
+
+
 class RefreshSessionRecord(Base):
     """Hashed, rotating refresh-session state for one scoped membership."""
 
@@ -191,10 +274,10 @@ class RefreshSessionRecord(Base):
     user_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    membership_id: Mapped[UUID] = mapped_column(
+    membership_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("organisation_memberships.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     family_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False, index=False)
@@ -246,3 +329,135 @@ class AuditEvent(Base):
 
     def __repr__(self) -> str:
         return f"AuditEvent(id={self.id!r}, event_type={self.event_type!r})"
+
+
+class OrganisationInvitation(Timestamped, Base):
+    """Secure, single-use tenant membership invitation."""
+
+    __tablename__ = "organisation_invitations"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_organisation_invitations_token_hash"),
+        CheckConstraint("length(trim(recipient_email)) > 0", name="ck_invitations_recipient_nonempty"),
+        CheckConstraint("recipient_email = lower(trim(recipient_email))", name="ck_invitations_recipient_normalized"),
+        CheckConstraint("role IN ('organisation_administrator', 'contributor', 'reader')", name="ck_invitations_role_valid"),
+        Index("ix_organisation_invitations_org", "organisation_id"),
+        Index("ix_organisation_invitations_email", "recipient_email"),
+        UniqueConstraint("organisation_id", "id", name="uq_organisation_invitations_org_id"),
+        ForeignKeyConstraint(
+            ["organisation_id", "superseded_by_id"],
+            ["organisation_invitations.organisation_id", "organisation_invitations.id"],
+            name="fk_invitations_superseded_same_org",
+            ondelete="RESTRICT",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        CheckConstraint("purpose IN ('initial_admin', 'member')", name="ck_invitations_purpose_valid"),
+        CheckConstraint(
+            "purpose <> 'initial_admin' OR role = 'organisation_administrator'",
+            name="ck_invitations_initial_admin_role",
+        ),
+        CheckConstraint(
+            "NOT (accepted_at IS NOT NULL AND revoked_at IS NOT NULL)",
+            name="ck_invitations_not_accepted_and_revoked",
+        ),
+        CheckConstraint(
+            "(accepted_at IS NULL) = (accepted_by_user_id IS NULL)",
+            name="ck_invitations_acceptance_complete",
+        ),
+        CheckConstraint(
+            "(revoked_at IS NULL) = (revocation_reason IS NULL)",
+            name="ck_invitations_revocation_complete",
+        ),
+        CheckConstraint(
+            "revocation_reason IS NULL OR revocation_reason IN "
+            "('superseded', 'revoked_by_admin', 'tenant_suspended', 'tenant_rejected', 'expired')",
+            name="ck_invitations_revocation_reason_valid",
+        ),
+        CheckConstraint(
+            "revoked_by_user_id IS NULL OR revoked_at IS NOT NULL",
+            name="ck_invitations_revoker_requires_revocation",
+        ),
+        CheckConstraint(
+            "(superseded_by_id IS NULL AND (revocation_reason IS NULL OR revocation_reason <> 'superseded')) "
+            "OR (superseded_by_id IS NOT NULL AND revocation_reason = 'superseded' AND superseded_by_id <> id)",
+            name="ck_invitations_supersession_pair",
+        ),
+        Index(
+            "uq_org_invitations_one_open_per_recipient",
+            "organisation_id",
+            "recipient_email",
+            unique=True,
+            postgresql_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+            sqlite_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+        ),
+        Index(
+            "uq_org_invitations_one_current_initial_admin",
+            "organisation_id",
+            unique=True,
+            postgresql_where=text("purpose = 'initial_admin' AND revoked_at IS NULL"),
+            sqlite_where=text("purpose = 'initial_admin' AND revoked_at IS NULL"),
+        ),
+        Index("ix_org_invitations_recipient_created", "organisation_id", "recipient_email", "created_at"),
+        Index(
+            "ix_org_invitations_open_expiry",
+            "expires_at",
+            postgresql_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+            sqlite_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    organisation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("organisations.id", ondelete="RESTRICT"), nullable=False
+    )
+    recipient_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    role: Mapped[str] = mapped_column(String(40), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    invited_by_user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purpose: Mapped[str] = mapped_column(String(24), nullable=False, default="member", server_default="member")
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT", name="fk_invitations_revoked_by_user")
+    )
+    revocation_reason: Mapped[str | None] = mapped_column(String(24))
+    superseded_by_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
+    accepted_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT", name="fk_invitations_accepted_by_user")
+    )
+
+    organisation: Mapped[Organisation] = relationship()
+    invited_by: Mapped[User] = relationship(foreign_keys="OrganisationInvitation.invited_by_user_id")
+
+    @validates("recipient_email")
+    def normalize_email(self, _key: str, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Recipient email must not be empty.")
+        return value.strip().lower()
+
+
+class OrganisationSettings(Timestamped, Base):
+    """Tenant-specific security and operational configuration."""
+
+    __tablename__ = "organisation_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "session_idle_timeout_minutes >= 5 AND session_idle_timeout_minutes <= 1440",
+            name="ck_settings_timeout_range",
+        ),
+    )
+
+    organisation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("organisations.id", ondelete="RESTRICT"), primary_key=True
+    )
+    allowed_email_domains: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    session_idle_timeout_minutes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=60, server_default="60"
+    )
+
+    organisation: Mapped[Organisation] = relationship()

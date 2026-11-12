@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { postQuery } from "./api/client";
+import { ApiRequestError, postQuery } from "./api/client";
 import type { QueryCitation, QueryResponse, QuerySource, QuerySourceMapEntry } from "./api/types";
 import { AppLink } from "./AppShell";
 import { useKnowledgeBase } from "./KnowledgeBaseContext";
@@ -17,6 +17,7 @@ export default function Workspace() {
   const [state, setState] = useState<RequestState>("idle");
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorRequestId, setErrorRequestId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [copyMessage, setCopyMessage] = useState("");
   const controller = useRef<AbortController | null>(null);
@@ -48,6 +49,7 @@ export default function Workspace() {
     timedOut.current = false;
     setResult(null);
     setErrorMessage("");
+    setErrorRequestId(null);
     setCopyMessage("");
     setElapsed(0);
     setState("loading");
@@ -62,6 +64,7 @@ export default function Workspace() {
       window.requestAnimationFrame(() => answerHeading.current?.focus());
     } catch (error) {
       if (currentController.signal.aborted) {
+        setErrorRequestId(null);
         setState(timedOut.current ? "timeout" : "cancelled");
         setErrorMessage(timedOut.current
           ? "The browser stopped waiting after 120 seconds. The server may still be processing this query. You can try again."
@@ -69,6 +72,11 @@ export default function Workspace() {
       } else {
         setState("error");
         setErrorMessage(error instanceof Error ? error.message : "An unexpected error occurred. Please try again.");
+        if (error instanceof ApiRequestError && typeof error.requestId === "string" && error.requestId.trim()) {
+          setErrorRequestId(error.requestId.trim());
+        } else {
+          setErrorRequestId(null);
+        }
       }
     } finally {
       window.clearTimeout(timeout);
@@ -142,7 +150,7 @@ export default function Workspace() {
         {state === "cancelled" && <p>{errorMessage} Aborting the browser request does not necessarily stop server-side work.</p>}
         {state === "timeout" && <p>{errorMessage}</p>}
       </div>
-      {state === "error" && <div className="query-error" role="alert"><strong>We couldn’t complete that query</strong><p>{errorMessage}</p><button type="button" className="secondary-button" onClick={() => document.getElementById("question")?.closest("form")?.requestSubmit()}>Try again</button></div>}
+      {state === "error" && <div className="query-error" role="alert"><strong>We couldn’t complete that query</strong><p>{errorMessage}</p>{errorRequestId && <p className="error-reference">Reference: {errorRequestId}</p>}<button type="button" className="secondary-button" onClick={() => document.getElementById("question")?.closest("form")?.requestSubmit()}>Try again</button></div>}
 
       {result && state === "success" && <section className="answer-layout" aria-label="Query result">
         <article className={`answer-panel${refused ? " answer-panel--refused" : ""}`}>

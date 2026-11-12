@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ApiRequestError, getCurrentUser, login, logout, setAccessToken, type OrganisationChoice } from "./api/client";
+import { ApiRequestError, getCurrentUser, login, logout, setAccessToken, type AuthScope, type OrganisationChoice } from "./api/client";
 import type { CurrentUserProfile } from "./api/types";
 
 // "unknown" lasts until the initial session check settles; nothing protected renders before then.
@@ -17,7 +17,7 @@ interface AuthValue {
   permissions: ReadonlySet<string> | null;
   organisationChoices: OrganisationChoice[];
   message: string;
-  signIn: (email: string, password: string, organisationId?: string) => Promise<SignInResult>;
+  signIn: (email: string, password: string, organisationId?: string, authScope?: AuthScope) => Promise<SignInResult>;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   clearChoices: () => void;
@@ -122,11 +122,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const requireLogin = () => {
-      const hadAuthenticatedProfile = profile !== null;
+    const requireLogin = (event: Event) => {
+      const customEvent = event as CustomEvent<{ reason?: string }>;
+      const isConfirmedExpiry = customEvent.detail?.reason === "expired" || profile !== null || statusRef.current === "signedIn";
       clearSession();
       setOrganisationChoices([]);
-      setMessage(hadAuthenticatedProfile ? "Your session expired. Sign in again to continue." : "");
+      setMessage(isConfirmedExpiry ? "Your session expired. Sign in again to continue." : "");
     };
     window.addEventListener("ekip:auth-required", requireLogin);
     return () => window.removeEventListener("ekip:auth-required", requireLogin);
@@ -139,11 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateStatus("signedIn");
   }
 
-  async function signIn(email: string, password: string, organisationId?: string): Promise<SignInResult> {
+  async function signIn(email: string, password: string, organisationId?: string, authScope: AuthScope = "tenant"): Promise<SignInResult> {
     setLoading(true);
     setMessage("");
     try {
-      const result = await login(email, password, organisationId);
+      const result = await login(email, password, organisationId, authScope);
       if (result && "requires_organisation_selection" in result) {
         setOrganisationChoices(result.organisations);
         return result.organisations.length > 0 ? "needsOrganisation" : "noOrganisation";

@@ -16,3 +16,8 @@ tests/
 docs/
 scripts/
 examples/
+
+# Exclude local frontend dependencies, stale builds and backup files.
+frontend/node_modules/
+frontend/dist/
+**/*.bak

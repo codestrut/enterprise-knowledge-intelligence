@@ -280,6 +280,34 @@ describe("Knowledge workspace", () => {
     expect(screen.queryByRole("button", { name: /Go to Source/ })).toBeNull();
     expect(screen.getByText("I don't have sufficient evidence in the available knowledge base to answer that question.")).toBeTruthy();
   });
+
+  it("displays reference ID in query errors only when present", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Tenant knowledge query failed.", request_id: "test-req-999" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Workspace />);
+    await ask();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Reference: test-req-999")).toBeTruthy();
+  });
+
+  it("does not render reference ID when error response lacks request ID", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Temporary failure" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Workspace />);
+    await ask();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByText(/Reference:/)).toBeNull();
+  });
 });
 
 describe("citation source mapping", () => {

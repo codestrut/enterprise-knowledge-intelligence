@@ -6,6 +6,8 @@ import DocumentLibrary from "./DocumentLibrary";
 import Workspace from "./Workspace";
 import { AuthProvider, useAuth } from "./AuthContext";
 import LoginPage from "./LoginPage";
+import PlatformAdmin from "./PlatformAdmin";
+import TenantAdmin from "./TenantAdmin";
 
 export default function App() {
   return <AuthProvider><KnowledgeBaseProvider><RoutedApp /></KnowledgeBaseProvider></AuthProvider>;
@@ -22,19 +24,53 @@ function RoutedApp() {
     return () => { window.removeEventListener("popstate", update); window.removeEventListener("ekip:navigate", update); };
   }, []);
   useLayoutEffect(() => {
-    const titles: Record<string, string> = { "/": "System Overview", "/library": "Document Management", "/workspace": "Knowledge Workspace" };
-    document.title = `${titles[path] ?? "Page not found"} · EKIP`;
+    const titles: Record<string, string> = {
+      "/": "System Overview",
+      "/library": "Document Management",
+      "/workspace": "Knowledge Workspace",
+      "/platform": "Platform Administration",
+      "/tenant/settings": "Organisation Administration",
+      "/403": "Access Forbidden",
+      "/forbidden": "Access Forbidden",
+    };
+    const canReadPlatform = auth.profile?.platform_permissions?.includes("organisations:read") === true;
+    const isPlatformHome = path === "/" && auth.profile?.organisation === null && canReadPlatform;
+    const title = path === "/platform" && auth.status !== "unknown" && auth.status !== "signedOut" && !canReadPlatform
+      ? "Access Forbidden"
+      : isPlatformHome ? "Platform Administration" : titles[path] ?? "Page not found";
+    document.title = `${title} · EKIP`;
     document.querySelector<HTMLElement>("main h1")?.focus({ preventScroll: true });
-  }, [path]);
+  }, [path, auth.status, auth.profile?.organisation, auth.profile?.platform_permissions]);
 
   if (auth.status === "unknown") return <main className="auth-pending" aria-busy="true"><p role="status">Checking your session…</p></main>;
   if (auth.status === "signedOut") return <LoginPage/>;
 
   const confirmedHealth = kb.healthError ? null : kb.health;
+  if (path === "/" && auth.profile?.organisation === null && auth.profile.platform_permissions.includes("organisations:read")) {
+    return <AppShell active="platform" health={confirmedHealth}><PlatformAdmin/></AppShell>;
+  }
   if (path === "/") return <AppShell active="overview" health={confirmedHealth}><Dashboard/></AppShell>;
   if (path === "/library") return <AppShell active="library" health={confirmedHealth}><DocumentLibrary/></AppShell>;
   if (path === "/workspace") return <AppShell active="workspace" health={confirmedHealth}><Workspace/></AppShell>;
+  if (path === "/platform") return auth.profile?.platform_permissions?.includes("organisations:read")
+    ? <AppShell active="platform" health={confirmedHealth}><PlatformAdmin/></AppShell>
+    : <AppShell active="" health={confirmedHealth}><ForbiddenPage/></AppShell>;
+  if (path === "/tenant/settings") return auth.profile?.organisation && auth.profile.permissions.includes("tenant:read")
+    ? <AppShell active="tenant-admin" health={confirmedHealth}><TenantAdmin/></AppShell>
+    : <AppShell active="" health={confirmedHealth}><ForbiddenPage/></AppShell>;
+  if (path === "/403" || path === "/forbidden") return <AppShell active="" health={confirmedHealth}><ForbiddenPage/></AppShell>;
   return <AppShell active="" health={confirmedHealth}><main className="page-section"><p className="eyebrow">404 · PAGE NOT FOUND</p><h1 tabIndex={-1}>This page isn’t here</h1><p>Use the main navigation or return to the system overview.</p><AppLink className="primary-button" href="/">Go to system overview <Icon name="arrow"/></AppLink></main></AppShell>;
+}
+
+function ForbiddenPage() {
+  return (
+    <main className="page-section forbidden-page">
+      <p className="eyebrow">403 · ACCESS RESTRICTED</p>
+      <h1 tabIndex={-1}>Access is forbidden</h1>
+      <p>You do not have permission to access this resource with your current organisation role.</p>
+      <AppLink className="primary-button" href="/">Return to system overview <Icon name="arrow"/></AppLink>
+    </main>
+  );
 }
 
 function Dashboard() {

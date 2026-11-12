@@ -38,3 +38,18 @@ class SharedGroundingEvaluator:
             if self._instance is None:
                 self._instance = self._factory()
             return self._instance.evaluate(*args, **kwargs)
+
+    def evaluate_predecomposed(self, *args, **kwargs):
+        """Evaluate already-decomposed claims without decomposing them again."""
+        with self._lock:
+            if self._instance is None:
+                self._instance = self._factory()
+
+            evaluator = self._instance
+            method = getattr(evaluator, "evaluate_predecomposed", None)
+
+            if callable(method):
+                return method(*args, **kwargs)
+
+            # Preserve compatibility with older injected evaluators.
+            return evaluator.evaluate(*args, **kwargs)

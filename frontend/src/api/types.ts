@@ -8,9 +8,11 @@ export interface HealthResponse {
 
 export interface CurrentUserProfile {
   email: string;
-  organisation: { id: string; name: string };
+  organisation: { id: string; name: string } | null;
   role: string;
   permissions: string[];
+  platform_permissions: string[];
+  platform_roles?: string[];
 }
 
 export interface DocumentRecord {
@@ -138,4 +140,160 @@ export interface QueryResponse {
   evidence?: QueryEvidence;
   refused?: boolean;
   generation_repair?: GenerationRepair;
+}
+
+export interface PlatformOrganisation {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  status: string;
+  initial_admin_email: string | null;
+  provisioning_attempts: number;
+  provisioning_started_at: string | null;
+  provisioning_error_code: string | null;
+  created_at: string | null;
+}
+
+export interface PlatformOrganisationListResponse { count: number; organisations: PlatformOrganisation[] }
+
+export interface PlatformOverviewResponse {
+  total_tenants: number;
+  active_tenants: number;
+  pending_tenants: number;
+  provisioning_tenants: number;
+  failed_tenants: number;
+  suspended_tenants: number;
+  total_documents: number;
+  total_chunks: number;
+}
+
+export type PlatformRole =
+  | "platform_super_administrator"
+  | "platform_tenant_creator"
+  | "platform_tenant_approver"
+  | "platform_provisioning_operator";
+
+export interface PlatformUser {
+  id: string;
+  email: string;
+  is_active: boolean;
+}
+
+export interface PlatformUserSearchResponse {
+  count: number;
+  users: PlatformUser[];
+}
+
+export interface PlatformRoleAssignmentResponse {
+  user_id: string;
+  role: PlatformRole;
+  already_assigned: boolean;
+}
+
+export interface PlatformRoleHolder {
+  id: string;
+  user_id: string;
+  email: string;
+  role: PlatformRole;
+  assigned_at: string;
+}
+
+export interface PlatformRoleHolderListResponse {
+  count: number;
+  assignments: PlatformRoleHolder[];
+}
+
+export interface PlatformAuditEvent {
+  id: string;
+  actor_user_id: string | null;
+  organisation_id: string | null;
+  event_type: string;
+  target_type: string | null;
+  target_id: string | null;
+  occurred_at: string;
+  details: Record<string, JsonValue>;
+}
+
+export interface PlatformAuditEventListResponse {
+  count: number;
+  events: PlatformAuditEvent[];
+}
+
+
+export type TenantRole = "organisation_administrator" | "contributor" | "reader";
+
+export interface TenantOverviewResponse {
+  organisation_id: string;
+  organisation_name: string;
+  document_count: number;
+  chunk_count: number;
+  failed_document_count: number;
+  member_count: number;
+}
+
+export interface TenantMember {
+  id: string;
+  user_id: string;
+  email: string;
+  role: TenantRole;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TenantMemberListResponse {
+  count: number;
+  members: TenantMember[];
+}
+
+export interface TenantInvitation {
+  id: string;
+  recipient_email: string;
+  role: TenantRole;
+  invited_by_email: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface TenantInvitationListResponse {
+  count: number;
+  invitations: TenantInvitation[];
+}
+
+export interface TenantInvitationCreateResponse {
+  id: string;
+  recipient_email: string;
+  role: TenantRole;
+  invitation_token: string | null;
+  expires_at: string;
+}
+
+export interface TenantSettings {
+  organisation_id: string;
+  allowed_email_domains: string[];
+  session_idle_timeout_minutes: number;
+}
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export interface TenantAuditEvent {
+  id: string;
+  actor_user_id: string | null;
+  organisation_id: string;
+  event_type: string;
+  target_type: string | null;
+  target_id: string | null;
+  occurred_at: string;
+  details: Record<string, JsonValue>;
+}
+
+export interface TenantAuditEventListResponse {
+  count: number;
+  events: TenantAuditEvent[];
 }

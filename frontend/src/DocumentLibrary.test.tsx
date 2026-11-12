@@ -2,10 +2,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import emptyList from "./test-fixtures/documents-empty.json";
-import { withAuthenticatedProfile } from "./test-fixtures/auth";
+import { authenticatedTestProfile, withAuthenticatedProfile } from "./test-fixtures/auth";
 
 // F2: the app renders only for a resolved session, so each fetch mock also answers GET /api/auth/me.
-function stubFetch(implementation: Parameters<typeof withAuthenticatedProfile>[0]) { vi.stubGlobal("fetch", withAuthenticatedProfile(implementation)); }
+function stubFetch(implementation: Parameters<typeof withAuthenticatedProfile>[0], profile?: unknown) { vi.stubGlobal("fetch", withAuthenticatedProfile(implementation, profile)); }
 
 const record = { document_id: "doc-1", filename: "handbook.pdf", page_count: 8, chunk_count: 22, status: "indexed" };
 
@@ -248,5 +248,152 @@ describe("document management", () => {
     expect(confirm.hasAttribute("disabled")).toBe(true);
     expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "DELETE")).toHaveLength(1);
     await act(async () => resolveDelete?.(response({ document_id: "doc-1", file_deleted: true, cleanup_required: false })));
+  });
+
+  it("hides upload controls and delete action buttons from reader users", async () => {
+    routeToLibrary();
+    const readerProfile = {
+      ...authenticatedTestProfile,
+      role: "reader",
+      permissions: ["documents:read", "documents:query"],
+    };
+    stubFetch(
+      vi.fn((url: string) =>
+        Promise.resolve(
+          response(
+            url === "/api/health"
+              ? { status: "ok", document_count: 1, chunk_count: 22 }
+              : { count: 1, documents: [record] }
+          )
+        )
+      ),
+      readerProfile
+    );
+    render(<App />);
+    expect((await screen.findAllByText("handbook.pdf")).length).toBeGreaterThan(0);
+    // Reader must not see upload form, input, or submit button
+    expect(screen.queryByLabelText(/Choose PDF file/)).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Upload a PDF" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Upload and index/ })).toBeNull();
+    // Reader must not see delete action buttons in table or cards
+    expect(screen.queryByRole("button", { name: /Delete/ })).toBeNull();
+  });
+
+  it("shows upload and delete controls for contributor and admin users", async () => {
+    routeToLibrary();
+    const contributorProfile = {
+      ...authenticatedTestProfile,
+      role: "contributor",
+      permissions: ["documents:read", "documents:query", "documents:upload", "documents:delete"],
+    };
+    stubFetch(
+      vi.fn((url: string) =>
+        Promise.resolve(
+          response(
+            url === "/api/health"
+              ? { status: "ok", document_count: 1, chunk_count: 22 }
+              : { count: 1, documents: [record] }
+          )
+        )
+      ),
+      contributorProfile
+    );
+    render(<App />);
+    expect((await screen.findAllByText("handbook.pdf")).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Choose PDF file/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Upload a PDF" })).toBeTruthy();
+    expect(within(screen.getByRole("table")).getByRole("button", { name: /Delete/ })).toBeTruthy();
+  });
+
+  it("displays intended document name safely and provides accessible labelling", async () => {
+    routeToLibrary();
+    const untrustedDoc = {
+      ...record,
+      filename: "reports/quarterly/<script>alert(1)</script>finance.pdf",
+    };
+    stubFetch(
+      vi.fn((url: string) =>
+        Promise.resolve(
+          response(
+            url === "/api/health"
+              ? { status: "ok", document_count: 1, chunk_count: 22 }
+              : { count: 1, documents: [untrustedDoc] }
+          )
+        )
+      )
+    );
+    render(<App />);
+    expect((await screen.findAllByText(/finance\.pdf/)).length).toBeGreaterThan(0);
+    fireEvent.click(within(screen.getByRole("table")).getByRole("button", { name: /Delete/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByText(/finance\.pdf/)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("reports/quarterly");
+    expect(dialog.getAttribute("aria-labelledby")).toBe("delete-dialog-title");
+    expect(dialog.getAttribute("aria-describedby")).toBe("delete-dialog-description");
+  });
+
+  it("moves focus into dialog when opened and restores focus to initiating control when dismissed", async () => {
+    routeToLibrary();
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return Promise.resolve(
+        response(
+          url === "/api/health"
+            ? { status: "ok", document_count: 1, chunk_count: 22 }
+            : { count: 1, documents: [record] }
+        )
+      );
+    });
+    stubFetch(fetchMock);
+    render(<App />);
+    expect((await screen.findAllByText("handbook.pdf")).length).toBeGreaterThan(0);
+    const deleteBtn = within(screen.getByRole("table")).getByRole("button", { name: /Delete/ });
+    deleteBtn.focus();
+    expect(document.activeElement).toBe(deleteBtn);
+
+    // Open dialog
+    fireEvent.click(deleteBtn);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeTruthy();
+    // Focus moves into dialog to Cancel button
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBe(document.activeElement);
+
+    // Dismiss with Cancel button
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(calls.filter((call) => call.init?.method === "DELETE")).toHaveLength(0);
+    // Focus restores to initiating button
+    expect(document.activeElement).toBe(deleteBtn);
+  });
+
+  it("dismisses dialog on Escape key without calling deletion API and restores focus", async () => {
+    routeToLibrary();
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return Promise.resolve(
+        response(
+          url === "/api/health"
+            ? { status: "ok", document_count: 1, chunk_count: 22 }
+            : { count: 1, documents: [record] }
+        )
+      );
+    });
+    stubFetch(fetchMock);
+    render(<App />);
+    expect((await screen.findAllByText("handbook.pdf")).length).toBeGreaterThan(0);
+    const deleteBtn = within(screen.getByRole("table")).getByRole("button", { name: /Delete/ });
+    deleteBtn.focus();
+    fireEvent.click(deleteBtn);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeTruthy();
+
+    // Dismiss with Escape key
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(calls.filter((call) => call.init?.method === "DELETE")).toHaveLength(0);
+    expect(document.activeElement).toBe(deleteBtn);
   });
 });

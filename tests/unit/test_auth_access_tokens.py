@@ -63,3 +63,17 @@ def test_tampered_and_expired_access_tokens_are_rejected():
 def test_access_token_requires_a_strong_configured_secret():
     with pytest.raises(RuntimeError, match="at least 32 bytes"):
         issue_access_token(principal(), uuid4(), secret="too-short")
+
+
+
+def test_noncanonical_base64_signature_encoding_is_rejected():
+    issued = issue_access_token(principal(), uuid4(), secret=SECRET)
+    body, signature = issued.token.split(".")
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    last_index = alphabet.index(signature[-1])
+    # For a 32-byte HMAC, the last base64 character has four unused low bits.
+    # Changing one of those bits preserves the decoded signature bytes.
+    alternate_signature = signature[:-1] + alphabet[last_index ^ 1]
+
+    with pytest.raises(AccessTokenError):
+        decode_access_token(f"{body}.{alternate_signature}", secret=SECRET)

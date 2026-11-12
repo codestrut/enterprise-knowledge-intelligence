@@ -75,7 +75,7 @@ def test_valid_auth_resolves_persisted_membership_permissions_and_closes_transac
     assert principal.organisation_id == organisation_id
     assert principal.role is Role.READER
     assert principal.permissions == frozenset(
-        {Permission.DOCUMENTS_READ, Permission.DOCUMENTS_QUERY}
+        {Permission.DOCUMENTS_READ, Permission.DOCUMENTS_QUERY, Permission.TENANT_READ}
     )
 
 

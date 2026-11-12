@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [organisationId, setOrganisationId] = useState("");
+  const [platformOperatorSignIn, setPlatformOperatorSignIn] = useState(false);
   const [error, setError] = useState("");
   const [prompt, setPrompt] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,10 +33,20 @@ export default function LoginPage() {
     setPrompt("");
     auth.clearMessage();
     try {
-      const result = await auth.signIn(email, password, organisationId || undefined);
+      const result = await auth.signIn(
+        email,
+        password,
+        platformOperatorSignIn ? undefined : organisationId || undefined,
+        platformOperatorSignIn ? "platform" : "tenant",
+      );
       // Keep the password until sign-in genuinely succeeds so an organisation choice needs no retyping.
-      if (result === "signedIn") setPassword("");
-      else if (result === "needsOrganisation") setPrompt("Choose an organisation to continue.");
+      if (result === "signedIn") {
+        setPassword("");
+        if (platformOperatorSignIn) {
+          window.history.replaceState({}, "", "/platform");
+          window.dispatchEvent(new Event("ekip:navigate"));
+        }
+      } else if (result === "needsOrganisation") setPrompt("Choose an organisation to continue.");
       else setError("No active organisation is available for this account. Contact your administrator.");
     } catch (cause) {
       setError(signInErrorMessage(cause));
@@ -69,7 +80,9 @@ export default function LoginPage() {
           <input id="login-password" type={showPassword ? "text" : "password"} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
           <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? "Hide" : "Show"}</button>
         </div>
-        {auth.organisationChoices.length > 0 && <><label htmlFor="login-organisation">Organisation</label><select id="login-organisation" required value={organisationId} onChange={(event) => setOrganisationId(event.target.value)}><option value="">Choose an organisation</option>{auth.organisationChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}</select></>}
+        <label className="login-scope-option"><input type="checkbox" checked={platformOperatorSignIn} onChange={(event) => { setPlatformOperatorSignIn(event.target.checked); setOrganisationId(""); auth.clearChoices(); setPrompt(""); setError(""); }} /> Sign in as a platform operator</label>
+        {platformOperatorSignIn && <p className="login-scope-help">Use this option only for an account with an assigned platform role. Platform sessions do not receive tenant document access.</p>}
+        {!platformOperatorSignIn && auth.organisationChoices.length > 0 && <><label htmlFor="login-organisation">Organisation</label><select id="login-organisation" required value={organisationId} onChange={(event) => setOrganisationId(event.target.value)}><option value="">Choose an organisation</option>{auth.organisationChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}</select></>}
         {prompt && !error && <p role="status" className="login-prompt">{prompt}</p>}
         {(error || auth.message) && <p role="alert" className="login-error">{error || auth.message}</p>}
         <button className="login-submit" type="submit" disabled={auth.loading}>{auth.loading ? <><span className="login-spinner" aria-hidden="true"/>Signing in…</> : <>Sign in securely <Icon name="arrow"/></>}</button>

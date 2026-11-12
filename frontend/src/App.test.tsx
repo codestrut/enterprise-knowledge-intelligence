@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StrictMode } from "react";
 import App from "./App";
-import { withAuthenticatedProfile } from "./test-fixtures/auth";
+import { authenticatedTestProfile, withAuthenticatedProfile } from "./test-fixtures/auth";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); document.title = ""; });
 
@@ -76,7 +76,7 @@ describe("shared application shell and routes", () => {
     expect((await screen.findAllByText("admin@example.test")).length).toBeGreaterThan(0);
     fireEvent.click(document.querySelector(".account-menu summary")!);
     expect((await screen.findAllByText("North Research")).length).toBeGreaterThan(0);
-    expect(screen.getByText("organisation administrator")).toBeTruthy();
+    expect(screen.getAllByText("Admin").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(await screen.findByRole("heading", { name: "Turn information into clarity." })).toBeTruthy();
     expect((await screen.findByRole("alert")).textContent).toContain("server could not confirm session revocation");
@@ -208,5 +208,178 @@ describe("shared application shell and routes", () => {
     fireEvent.click(screen.getByText("View documents"));
     expect(screen.getByText("handbook.pdf")).toBeTruthy();
     expect(screen.getByText("guide.pdf")).toBeTruthy();
+  });
+
+  it("renders admin role badge in AppShell for administrator profile", async () => {
+    mockApi();
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Knowledge operations" })).toBeTruthy();
+    const adminBadges = screen.getAllByText("Admin");
+    expect(adminBadges.length).toBeGreaterThan(0);
+    expect(adminBadges[0].getAttribute("data-role")).toBe("organisation_administrator");
+  });
+
+  it("renders contributor role badge in AppShell for contributor profile", async () => {
+    const contributorProfile = { ...authenticatedTestProfile, role: "contributor" };
+    vi.stubGlobal("fetch", withAuthenticatedProfile(vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(url === "/api/health" ? { status: "ok" } : { count: 0, documents: [] }), { status: 200, headers: { "Content-Type": "application/json" } }))), contributorProfile));
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Knowledge operations" })).toBeTruthy();
+    const contribBadges = screen.getAllByText("Contributor");
+    expect(contribBadges.length).toBeGreaterThan(0);
+    expect(contribBadges[0].getAttribute("data-role")).toBe("contributor");
+  });
+
+  it("renders reader role badge in AppShell for reader profile", async () => {
+    const readerProfile = { ...authenticatedTestProfile, role: "reader" };
+    vi.stubGlobal("fetch", withAuthenticatedProfile(vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(url === "/api/health" ? { status: "ok" } : { count: 0, documents: [] }), { status: 200, headers: { "Content-Type": "application/json" } }))), readerProfile));
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Knowledge operations" })).toBeTruthy();
+    const readerBadges = screen.getAllByText("Reader");
+    expect(readerBadges.length).toBeGreaterThan(0);
+    expect(readerBadges[0].getAttribute("data-role")).toBe("reader");
+  });
+
+  it("renders the dedicated 403 Forbidden page on /403 with working return navigation", async () => {
+    window.history.replaceState({}, "", "/403");
+    mockApi();
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Access is forbidden" })).toBeTruthy();
+    expect(screen.getByText("403 · ACCESS RESTRICTED")).toBeTruthy();
+    expect(document.title).toBe("Access Forbidden · EKIP");
+
+    fireEvent.click(screen.getByRole("link", { name: "Return to system overview" }));
+    expect(await screen.findByRole("heading", { name: "Knowledge operations" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/");
+  });
+
+
+  it("allows platform readers to access tenant administration and loads the tenant list", async () => {
+    window.history.replaceState({}, "", "/platform");
+
+    const profile = {
+      ...authenticatedTestProfile,
+      platform_permissions: ["organisations:read"],
+    };
+    const fetchMock = vi.fn((input: string) => {
+      if (input === "/api/health") {
+        return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+      }
+      if (input === "/api/documents") {
+        return Promise.resolve(new Response(JSON.stringify({ count: 0, documents: [] }), { status: 200 }));
+      }
+      if (input === "/api/platform/organisations") {
+        return Promise.resolve(new Response(JSON.stringify({ count: 1, organisations: [{
+          id: "org-platform-test",
+          name: "Platform Test Organisation",
+          slug: "platform-test",
+          status: "active",
+          is_active: true,
+          initial_admin_email: "tenant-admin@example.test",
+          provisioning_attempts: 1,
+          provisioning_started_at: null,
+          provisioning_error_code: null,
+          created_at: "2026-01-01T12:00:00Z",
+        }] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ detail: "Unexpected request" }), { status: 404 }));
+    });
+
+    vi.stubGlobal("fetch", withAuthenticatedProfile(fetchMock, profile));
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Platform administration" })).toBeTruthy();
+    expect(screen.getByText("View platform overview and tenants")).toBeTruthy();
+
+    // Tenant records now load when the Tenant lifecycle tab is selected.
+    fireEvent.click(screen.getByRole("tab", { name: "Tenant lifecycle" }));
+
+    expect(await screen.findByText("Platform Test Organisation")).toBeTruthy();
+    expect(screen.getByText("platform-test")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith("/api/platform/organisations", expect.anything());
+    expect(screen.queryByRole("button", { name: "Create registration" })).toBeNull();
+  });
+
+  it("denies platform access when the session lacks organisations:read", async () => {
+    window.history.replaceState({}, "", "/platform");
+
+    const profile = { ...authenticatedTestProfile, platform_permissions: [] };
+    const fetchMock = vi.fn((input: string) => Promise.resolve(
+      new Response(JSON.stringify(input === "/api/health" ? { status: "ok" } : { count: 0, documents: [] }), { status: 200 })
+    ));
+
+    vi.stubGlobal("fetch", withAuthenticatedProfile(fetchMock, profile));
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Access is forbidden" })).toBeTruthy();
+    await waitFor(() => expect(document.title).toBe("Access Forbidden · EKIP"));
+    expect(screen.queryByRole("heading", { name: "Tenant administration" })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/platform/organisations", expect.anything());
+    expect(screen.queryByRole("link", { name: /Platform administration/i })).toBeNull();
+  });
+
+  it("routes tenant readers to the organisation overview and exposes only granted admin sections", async () => {
+    window.history.replaceState({}, "", "/tenant/settings");
+    const profile = {
+      ...authenticatedTestProfile,
+      permissions: ["documents:read", "documents:query", "tenant:read"],
+    };
+    const fetchMock = vi.fn((input: string) => {
+      if (input === "/api/health") return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+      if (input === "/api/documents") return Promise.resolve(new Response(JSON.stringify({ count: 0, documents: [] }), { status: 200 }));
+      if (input === "/api/tenant/overview") return Promise.resolve(new Response(JSON.stringify({
+        organisation_id: "org-test", organisation_name: "Test Organisation", document_count: 7,
+        chunk_count: 64, failed_document_count: 0, member_count: 3,
+      }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ detail: "Unexpected request" }), { status: 404 }));
+    });
+    vi.stubGlobal("fetch", withAuthenticatedProfile(fetchMock, profile));
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Organisation administration" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Test Organisation" })).toBeTruthy();
+    expect(screen.getByText("7")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Organisation" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("button", { name: "Members & invitations" })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith("/api/tenant/overview", expect.anything());
+  });
+
+  it("denies tenant administration when the session lacks tenant:read", async () => {
+    window.history.replaceState({}, "", "/tenant/settings");
+    const profile = { ...authenticatedTestProfile, permissions: ["documents:read"] };
+    const fetchMock = vi.fn((input: string) => Promise.resolve(new Response(
+      JSON.stringify(input === "/api/health" ? { status: "ok" } : { count: 0, documents: [] }), { status: 200 },
+    )));
+    vi.stubGlobal("fetch", withAuthenticatedProfile(fetchMock, profile));
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Access is forbidden" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Organisation administration" })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/tenant/overview", expect.anything());
+    expect(screen.queryByRole("link", { name: "Organisation" })).toBeNull();
+  });
+
+  it("keeps 401, 403, and 404 views distinct", async () => {
+    window.history.replaceState({}, "", "/nonexistent-page");
+    mockApi();
+    const { unmount } = render(<App />);
+    expect(await screen.findByRole("heading", { name: "This page isn’t here" })).toBeTruthy();
+    expect(screen.getByText("404 · PAGE NOT FOUND")).toBeTruthy();
+    expect(screen.queryByText("403 · ACCESS RESTRICTED")).toBeNull();
+    unmount();
+
+    window.history.replaceState({}, "", "/403");
+    mockApi();
+    const { unmount: unmount403 } = render(<App />);
+    expect(await screen.findByRole("heading", { name: "Access is forbidden" })).toBeTruthy();
+    expect(screen.queryByText("404 · PAGE NOT FOUND")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Turn information into clarity." })).toBeNull();
+    unmount403();
+
+    window.history.replaceState({}, "", "/workspace");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ detail: "Authentication is required." }), { status: 401 }))));
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Turn information into clarity." })).toBeTruthy();
+    expect(screen.queryByText("403 · ACCESS RESTRICTED")).toBeNull();
+    expect(screen.queryByText("404 · PAGE NOT FOUND")).toBeNull();
   });
 });

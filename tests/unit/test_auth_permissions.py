@@ -5,6 +5,9 @@ from src.auth.permissions import (
     Permission,
     PlatformPermission,
     Role,
+    PlatformRole,
+    permissions_for_platform_role,
+    PlatformPermission,
     permissions_for_role,
     platform_permissions_for_user,
     role_allows,
@@ -24,13 +27,14 @@ def test_contributor_can_manage_documents_but_not_members_or_authentication():
             Permission.DOCUMENTS_QUERY,
             Permission.DOCUMENTS_UPLOAD,
             Permission.DOCUMENTS_DELETE,
+            Permission.TENANT_READ,
         }
     )
 
 
 def test_reader_is_limited_to_document_read_and_query():
     assert permissions_for_role(Role.READER) == frozenset(
-        {Permission.DOCUMENTS_READ, Permission.DOCUMENTS_QUERY}
+        {Permission.DOCUMENTS_READ, Permission.DOCUMENTS_QUERY, Permission.TENANT_READ}
     )
 
 
@@ -63,3 +67,11 @@ def test_unknown_roles_and_permissions_fail_closed():
 def test_role_permission_bundles_are_immutable():
     with pytest.raises(AttributeError):
         permissions_for_role(Role.READER).add(Permission.DOCUMENTS_DELETE)
+
+
+def test_platform_role_profiles_separate_creation_approval_and_recovery():
+    assert permissions_for_platform_role(PlatformRole.TENANT_CREATOR) == frozenset({PlatformPermission.ORGANISATIONS_READ, PlatformPermission.ORGANISATIONS_CREATE})
+    assert permissions_for_platform_role(PlatformRole.TENANT_APPROVER) == frozenset({PlatformPermission.ORGANISATIONS_READ, PlatformPermission.ORGANISATIONS_APPROVE})
+    assert PlatformPermission.ORGANISATIONS_READ in permissions_for_platform_role(PlatformRole.PROVISIONING_OPERATOR)
+    assert PlatformPermission.PROVISIONING_RECOVER in permissions_for_platform_role(PlatformRole.PROVISIONING_OPERATOR)
+    assert PlatformPermission.PLATFORM_ROLES_ASSIGN in permissions_for_platform_role(PlatformRole.SUPER_ADMINISTRATOR)

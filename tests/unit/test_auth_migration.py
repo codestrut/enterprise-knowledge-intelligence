@@ -11,14 +11,19 @@ def test_auth_migrations_are_a_linear_versioned_chain():
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(ROOT / "migrations"))
     scripts = ScriptDirectory.from_config(config)
-    heads = scripts.get_heads()
-
-    assert heads == ["0004_scoped_security_audit"]
-    revision = scripts.get_revision(heads[0])
-    assert revision.down_revision == "0003_auth_hardening"
-    assert scripts.get_revision(revision.down_revision).down_revision == "0002_auth_refresh_sessions"
-    assert scripts.get_revision(scripts.get_revision(revision.down_revision).down_revision).down_revision == "0001_identity_foundation"
-    assert scripts.get_revision(scripts.get_revision(scripts.get_revision(revision.down_revision).down_revision).down_revision).down_revision is None
+    assert scripts.get_heads() == ["0008_invitation_lifecycle"]
+    expected = [
+        ("0008_invitation_lifecycle", "0007_tenant_admin"),
+        ("0007_tenant_admin", "0006_platform_roles_and_recovery"),
+        ("0006_platform_roles_and_recovery", "0005_tenant_onboarding"),
+        ("0005_tenant_onboarding", "0004_scoped_security_audit"),
+        ("0004_scoped_security_audit", "0003_auth_hardening"),
+        ("0003_auth_hardening", "0002_auth_refresh_sessions"),
+        ("0002_auth_refresh_sessions", "0001_identity_foundation"),
+        ("0001_identity_foundation", None),
+    ]
+    for revision_id, parent_id in expected:
+        assert scripts.get_revision(revision_id).down_revision == parent_id
 
 
 def test_initial_migration_only_creates_auth_tables_and_reversible_schema():
@@ -71,3 +76,35 @@ def test_scoped_audit_migration_adds_organisation_boundary_without_touching_docu
     assert '"ix_auth_audit_events_organisation_time"' in migration
     assert "documents_manifest" not in migration
     assert "uploads" not in migration
+
+
+def test_tenant_onboarding_migration_is_additive_and_does_not_touch_document_storage():
+    migration = (ROOT / "migrations/versions/0005_tenant_onboarding.py").read_text()
+    assert '"tenant_onboarding"' in migration
+    assert '"idempotency_key"' in migration
+    assert '"request_fingerprint"' in migration
+    assert '"initial_admin_email"' in migration
+    assert '"provisioning_error_code"' in migration
+    assert "documents_manifest" not in migration
+    assert "uploads" not in migration
+    assert "def downgrade()" in migration
+
+
+def test_invitation_lifecycle_migration_preserves_only_provable_legacy_history():
+    migration = (ROOT / "migrations/versions/0008_invitation_lifecycle.py").read_text()
+
+    # Accepted actors are recovered through a same-organisation membership
+    # whose user's normalized email matches the historical recipient.
+    assert "organisation_memberships AS membership" in migration
+    assert "user_record.email = invitation.recipient_email" in migration
+    assert "SET accepted_by_user_id = user_record.id" in migration
+
+    # Legacy role/email alone must not convert an invitation to initial_admin.
+    assert "SET purpose = 'initial_admin'" in migration
+    assert "onboarding.initial_admin_invitation_accepted_at IS NOT NULL" in migration
+    assert "initial_admin_invitation_id = invitation.id" in migration
+
+    # Historical accepted invitations may repeat; only multiple pending rows
+    # collide with the new one-open-invitation-per-recipient invariant.
+    assert "WHERE accepted_at IS NULL\n            GROUP BY organisation_id, recipient_email" in migration
+    assert "GROUP BY organisation_id, recipient_email HAVING count(*) > 1" not in migration

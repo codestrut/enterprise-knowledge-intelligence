@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 import pytest
 from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -28,11 +29,12 @@ from src.auth.models import (
     AuditEvent,
     Organisation,
     OrganisationMembership,
+    PlatformRoleAssignment,
     RefreshSessionRecord,
     User,
 )
 from src.auth.passwords import hash_password
-from src.auth.permissions import Role
+from src.auth.permissions import PlatformRole, Role
 from src.auth.service import (
     AuthenticationError,
     authenticate_managed_user,
@@ -69,12 +71,11 @@ def pg_engine():
                 pytest.fail("Refusing to migrate a non-empty unversioned test database")
             if "alembic_version" in existing_tables:
                 current = connection.scalar(text("SELECT version_num FROM alembic_version"))
-                if current not in {
-                    "0001_identity_foundation",
-                    "0002_auth_refresh_sessions",
-                    "0003_auth_hardening",
-                    "0004_scoped_security_audit",
-                }:
+                known_revisions = {
+                    script.revision
+                    for script in ScriptDirectory.from_config(Config("alembic.ini")).walk_revisions()
+                }
+                if current not in known_revisions:
                     pytest.fail("Refusing to change an unknown Alembic revision")
 
         config = Config("alembic.ini")
@@ -490,8 +491,8 @@ def test_postgres_old_token_replay_racing_legitimate_refresh_leaves_family_dead(
             ) is not None
 
 
-def test_postgres_family_lock_is_taken_before_any_row_lock(pg_engine_bounded):
-    """Refresh, single-token logout and family logout must take the family lock first."""
+def test_postgres_tenant_session_operations_use_consistent_lock_order(pg_engine_bounded):
+    """Tenant refresh and logout lock organisation, family, then session rows."""
     engine = pg_engine_bounded
     _user_id, email, _org_id, _membership_id = _new_identity(engine)
     with Session(engine) as db:
@@ -503,10 +504,12 @@ def test_postgres_family_lock_is_taken_before_any_row_lock(pg_engine_bounded):
         lowered = statement.lower()
         if "pg_advisory_xact_lock" in lowered:
             trace.append("family_lock")
+        elif "for update" in lowered and "organisations" in lowered:
+            trace.append("organisation_lock")
         elif "for update" in lowered:
             trace.append("row_lock")
 
-    def first_lock(operation) -> str:
+    def lock_sequence(operation) -> list[str]:
         trace.clear()
         event.listen(engine, "before_cursor_execute", collect)
         try:
@@ -514,7 +517,7 @@ def test_postgres_family_lock_is_taken_before_any_row_lock(pg_engine_bounded):
         finally:
             event.remove(engine, "before_cursor_execute", collect)
         assert trace, "operation took no locks"
-        return trace[0]
+        return list(trace)
 
     def refresh():
         with Session(engine) as db:
@@ -525,16 +528,545 @@ def test_postgres_family_lock_is_taken_before_any_row_lock(pg_engine_bounded):
     def refresh_and_keep():
         grant_holder["grant"] = refresh()
 
-    assert first_lock(refresh_and_keep) == "family_lock"
+    assert lock_sequence(refresh_and_keep)[:3] == [
+        "organisation_lock",
+        "family_lock",
+        "row_lock",
+    ]
 
     def single_logout():
         with Session(engine) as db:
             revoke_refresh_session(db, grant_holder["grant"].refresh_token)
 
-    assert first_lock(single_logout) == "family_lock"
+    assert lock_sequence(single_logout)[:3] == [
+        "organisation_lock",
+        "family_lock",
+        "row_lock",
+    ]
 
     def family_logout():
         with Session(engine) as db:
             revoke_refresh_family(db, original.family_id)
 
-    assert first_lock(family_logout) == "family_lock"
+    assert lock_sequence(family_logout)[:3] == [
+        "organisation_lock",
+        "family_lock",
+        "row_lock",
+    ]
+
+
+class _PostgresTenantIsolationKnowledgeBase:
+    """Small deterministic document store for real API authorization tests."""
+
+    def __init__(self, embedder=None, reranker=None):
+        self.embedder = embedder
+        self.reranker = reranker
+        self.tenant_id = None
+        self.documents = {}
+        self.chunks = []
+
+    def list_documents(self):
+        return list(self.documents.values())
+
+    def delete_document(self, document_id):
+        return self.documents.pop(document_id)
+
+
+class _PostgresTenantIsolationPipeline:
+    """Expose only the chunks in the authenticated tenant's workspace.
+
+    The real retrieval/ranking path is covered by
+    test_authenticated_query_uses_only_the_current_tenant_workspace. This
+    deterministic adapter isolates the PostgreSQL-backed auth-to-workspace
+    boundary without loading a model or calling an external LLM.
+    """
+
+    def __init__(self, knowledge_base, **_kwargs):
+        self.knowledge_base = knowledge_base
+        self.tenant_id = knowledge_base.tenant_id
+        self.received_tenant_ids = []
+
+    def query(self, question, top_k=5, tenant_id=None):
+        self.received_tenant_ids.append(str(tenant_id))
+        if str(tenant_id) != str(self.tenant_id):
+            raise ValueError("Tenant context does not match the workspace.")
+        sources = self.knowledge_base.chunks[:top_k]
+        return {
+            "question": question,
+            "answer": "Synthetic tenant-scoped answer. [Source 1]",
+            "sources": sources,
+            "source_map": {},
+            "citations": [],
+            "invalid_citations": [],
+            "grounding": [],
+            "evidence": {"sufficient": bool(sources), "reason": "synthetic_test"},
+            "refused": not bool(sources),
+        }
+
+
+def _create_admin_identity(engine, label: str):
+    suffix = uuid4().hex
+    user = User(
+        email=f"{label}-{suffix}@example.invalid",
+        password_hash=hash_password("violet-cactus-orbit-sailed"),
+    )
+    organisation = Organisation(
+        name=f"API isolation {label} {suffix}",
+        slug=f"api-isolation-{label}-{suffix}",
+    )
+    membership = OrganisationMembership(
+        user=user,
+        organisation=organisation,
+        role=Role.ORGANISATION_ADMINISTRATOR,
+    )
+    with Session(engine) as db:
+        db.add_all([user, organisation, membership])
+        db.commit()
+        db.refresh(user)
+        db.refresh(organisation)
+        return user.id, user.email, organisation.id
+
+
+@pytest.fixture
+
+def postgres_api_tenant_world(pg_engine, monkeypatch, tmp_path):
+    """Use persisted PostgreSQL identities with the real authenticated document API."""
+    from fastapi.testclient import TestClient
+
+    from src.api.document_records import manifest_record
+    from src.api.tenant_storage import TenantWorkspaceRegistry
+
+    # The API's HMAC signing key is test-only and is never printed.
+    monkeypatch.setenv("EKIP_ACCESS_TOKEN_SECRET", "test-only-key-" + secrets.token_hex(32))
+
+    # Avoid loading the embedding model merely to import the API for these tests.
+    try:
+        import src.knowledge_base as knowledge_base_module
+        if hasattr(knowledge_base_module, "Embedder"):
+            monkeypatch.setattr(knowledge_base_module, "Embedder", lambda: object())
+        from src.api import main as api_main
+    except ImportError as exc:
+        if exc.name == "sentence_transformers":
+            pytest.skip("sentence_transformers is unavailable in this test environment")
+        raise
+
+    registry = TenantWorkspaceRegistry(
+        tmp_path / "postgres-api-tenant-workspaces",
+        shared_embedder=object(),
+        shared_reranker=object(),
+        pipeline_dependencies={},
+        knowledge_base_factory=_PostgresTenantIsolationKnowledgeBase,
+        pipeline_factory=_PostgresTenantIsolationPipeline,
+    )
+    monkeypatch.setattr(api_main, "tenant_workspaces", registry)
+
+    def override_auth_db():
+        with Session(pg_engine) as db:
+            yield db
+
+    monkeypatch.setitem(
+        api_main.app.dependency_overrides, api_main.get_auth_db, override_auth_db
+    )
+
+    client = TestClient(api_main.app)
+    identities = {}
+    for label in ("alpha", "beta"):
+        user_id, email, organisation_id = _create_admin_identity(pg_engine, label)
+        response = client.post(
+            "/auth/login",
+            json={"email": email, "password": "violet-cactus-orbit-sailed"},
+        )
+        assert response.status_code == 200, response.text
+        token = response.json()["access_token"]
+        document_id = str(uuid4())
+        workspace = registry.workspace_for(organisation_id)
+        record = {
+            "document_id": document_id,
+            "filename": f"{label}-confidential.pdf",
+            "status": "indexed",
+            "chunk_count": 1,
+            "sha256": secrets.token_hex(32),
+        }
+        workspace.knowledge_base.documents[document_id] = record
+        workspace.write_manifest({document_id: manifest_record(document_id, record)})
+        (workspace.upload_directory / f"{document_id}.pdf").write_bytes(
+            b"%PDF-1.4\n% synthetic tenant-isolation test document\n"
+        )
+        identities[label] = {
+            "user_id": user_id,
+            "email": email,
+            "organisation_id": organisation_id,
+            "document_id": document_id,
+            "workspace": workspace,
+            "headers": {"Authorization": f"Bearer {token}"},
+        }
+
+    try:
+        yield {"client": client, "identities": identities, "registry": registry}
+    finally:
+        # Do not leave test-specific dependency overrides on the process-global app.
+        api_main.app.dependency_overrides.pop(api_main.get_auth_db, None)
+
+
+def test_postgres_authenticated_document_listing_is_tenant_scoped(postgres_api_tenant_world):
+    world = postgres_api_tenant_world
+    client = world["client"]
+    alpha = world["identities"]["alpha"]
+    beta = world["identities"]["beta"]
+
+    alpha_response = client.get("/documents", headers=alpha["headers"])
+    beta_response = client.get("/documents", headers=beta["headers"])
+
+    assert alpha_response.status_code == 200, alpha_response.text
+    assert beta_response.status_code == 200, beta_response.text
+    alpha_ids = {item["document_id"] for item in alpha_response.json()["documents"]}
+    beta_ids = {item["document_id"] for item in beta_response.json()["documents"]}
+    assert alpha_ids == {alpha["document_id"]}
+    assert beta_ids == {beta["document_id"]}
+    assert beta["document_id"] not in alpha_ids
+    assert alpha["document_id"] not in beta_ids
+
+
+def test_postgres_authenticated_document_download_and_delete_cannot_cross_tenants(
+    postgres_api_tenant_world,
+):
+    world = postgres_api_tenant_world
+    client = world["client"]
+    alpha = world["identities"]["alpha"]
+    beta = world["identities"]["beta"]
+
+    own_download = client.get(
+        f"/documents/{alpha['document_id']}/file", headers=alpha["headers"]
+    )
+    cross_download = client.get(
+        f"/documents/{beta['document_id']}/file", headers=alpha["headers"]
+    )
+    cross_delete = client.delete(
+        f"/documents/{beta['document_id']}", headers=alpha["headers"]
+    )
+
+    assert own_download.status_code == 200
+    assert own_download.content.startswith(b"%PDF-")
+    assert cross_download.status_code == 404
+    assert cross_delete.status_code == 404
+
+    beta_file = beta["workspace"].upload_directory / f"{beta['document_id']}.pdf"
+    assert beta["document_id"] in beta["workspace"].knowledge_base.documents
+    assert beta_file.is_file(), "Cross-tenant delete must not remove the other tenant's file"
+    assert beta["document_id"] in beta["workspace"].read_manifest()
+
+
+def test_postgres_document_delete_audit_uses_authenticated_organisation(
+    postgres_api_tenant_world, pg_engine
+):
+    from sqlalchemy import select
+
+    world = postgres_api_tenant_world
+    client = world["client"]
+    alpha = world["identities"]["alpha"]
+
+    response = client.delete(
+        f"/documents/{alpha['document_id']}", headers=alpha["headers"]
+    )
+    assert response.status_code == 200, response.text
+
+    with Session(pg_engine) as db:
+        event = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "document.delete",
+                AuditEvent.target_id == alpha["document_id"],
+            )
+        )
+    assert event is not None
+    assert event.organisation_id == alpha["organisation_id"]
+    assert event.actor_user_id == alpha["user_id"]
+
+
+def test_postgres_authenticated_query_uses_only_current_tenant_workspace(
+    postgres_api_tenant_world, pg_engine
+):
+    """Persisted PostgreSQL identities must route queries to their own workspace."""
+    world = postgres_api_tenant_world
+    client = world["client"]
+    alpha = world["identities"]["alpha"]
+    beta = world["identities"]["beta"]
+
+    alpha_chunk = {
+        "text": "alpha canary confidential project",
+        "metadata": {
+            "document_id": alpha["document_id"],
+            "organisation_id": str(alpha["organisation_id"]),
+            "source": "alpha-confidential.pdf",
+            "page": 1,
+        },
+    }
+    beta_chunk = {
+        "text": "beta canary confidential project",
+        "metadata": {
+            "document_id": beta["document_id"],
+            "organisation_id": str(beta["organisation_id"]),
+            "source": "beta-confidential.pdf",
+            "page": 1,
+        },
+    }
+    alpha["workspace"].knowledge_base.chunks = [alpha_chunk]
+    beta["workspace"].knowledge_base.chunks = [beta_chunk]
+
+    alpha_response = client.post(
+        "/query",
+        headers=alpha["headers"],
+        json={"question": "beta canary confidential project", "top_k": 5},
+    )
+    beta_response = client.post(
+        "/query",
+        headers=beta["headers"],
+        json={"question": "alpha canary confidential project", "top_k": 5},
+    )
+
+    assert alpha_response.status_code == 200, alpha_response.text
+    assert beta_response.status_code == 200, beta_response.text
+    alpha_sources = alpha_response.json()["sources"]
+    beta_sources = beta_response.json()["sources"]
+    assert {item["metadata"]["document_id"] for item in alpha_sources} == {
+        alpha["document_id"]
+    }
+    assert {item["metadata"]["document_id"] for item in beta_sources} == {
+        beta["document_id"]
+    }
+    assert beta["document_id"] not in {
+        item["metadata"]["document_id"] for item in alpha_sources
+    }
+    assert alpha["document_id"] not in {
+        item["metadata"]["document_id"] for item in beta_sources
+    }
+
+    alpha_pipeline = alpha["workspace"].get_pipeline()
+    beta_pipeline = beta["workspace"].get_pipeline()
+    assert alpha_pipeline.received_tenant_ids == [str(alpha["organisation_id"])]
+    assert beta_pipeline.received_tenant_ids == [str(beta["organisation_id"])]
+
+    with Session(pg_engine) as db:
+        audit_events = db.scalars(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "knowledge.query",
+                AuditEvent.actor_user_id.in_([alpha["user_id"], beta["user_id"]]),
+            )
+        ).all()
+    events_by_actor = {event.actor_user_id: event for event in audit_events}
+    assert events_by_actor[alpha["user_id"]].organisation_id == alpha["organisation_id"]
+    assert events_by_actor[beta["user_id"]].organisation_id == beta["organisation_id"]
+
+def test_postgres_audit_reads_are_scoped_to_authenticated_organisation(
+    postgres_api_tenant_world,
+):
+    """Audit reads for persisted PostgreSQL identities must never cross tenants."""
+    world = postgres_api_tenant_world
+    client = world["client"]
+    alpha = world["identities"]["alpha"]
+    beta = world["identities"]["beta"]
+
+    for identity in (alpha, beta):
+        response = client.post(
+            "/query",
+            headers=identity["headers"],
+            json={"question": "tenant scoped audit probe", "top_k": 5},
+        )
+        assert response.status_code == 200, response.text
+
+    alpha_audit = client.get("/audit/events", headers=alpha["headers"])
+    beta_audit = client.get("/audit/events", headers=beta["headers"])
+    assert alpha_audit.status_code == 200, alpha_audit.text
+    assert beta_audit.status_code == 200, beta_audit.text
+
+    alpha_events = alpha_audit.json()["events"]
+    beta_events = beta_audit.json()["events"]
+    assert alpha_events and beta_events
+    assert all(event["organisation_id"] == str(alpha["organisation_id"]) for event in alpha_events)
+    assert all(event["organisation_id"] == str(beta["organisation_id"]) for event in beta_events)
+    assert all(event["actor_user_id"] == str(alpha["user_id"]) for event in alpha_events)
+    assert all(event["actor_user_id"] == str(beta["user_id"]) for event in beta_events)
+    assert beta["document_id"] not in str(alpha_events)
+    assert alpha["document_id"] not in str(beta_events)
+
+
+def test_postgres_platform_admin_flag_does_not_grant_cross_tenant_content_access(
+    postgres_api_tenant_world, pg_engine, request
+):
+    """Platform flag cannot widen a reader membership into customer-content access."""
+    world = postgres_api_tenant_world
+    client = world["client"]
+    alpha = world["identities"]["alpha"]
+    beta = world["identities"]["beta"]
+
+    test_admin_ids = []
+
+    def restore_test_admin_flags():
+        with Session(pg_engine) as cleanup_db:
+            for test_user_id in test_admin_ids:
+                test_user = cleanup_db.get(User, test_user_id)
+                if test_user is not None:
+                    test_user.is_platform_admin = False
+            cleanup_db.commit()
+
+    request.addfinalizer(restore_test_admin_flags)
+
+    user = User(
+        email=f"platform-reader-{uuid4().hex}@example.invalid",
+        password_hash=hash_password("violet-cactus-orbit-sailed"),
+        is_platform_admin=True,
+    )
+    membership = OrganisationMembership(
+        user=user,
+        organisation_id=alpha["organisation_id"],
+        role=Role.READER,
+    )
+    platform_email = user.email
+    with Session(pg_engine) as db:
+        db.add_all([user, membership])
+        db.commit()
+        db.refresh(user)
+    test_admin_ids.append(user.id)
+
+    login = client.post(
+        "/auth/login",
+        json={"email": platform_email, "password": "violet-cactus-orbit-sailed"},
+    )
+    assert login.status_code == 200, login.text
+    platform_reader_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    own_list = client.get("/documents", headers=platform_reader_headers)
+    cross_download = client.get(
+        f"/documents/{beta['document_id']}/file", headers=platform_reader_headers
+    )
+    audit_read = client.get("/audit/events", headers=platform_reader_headers)
+    assert own_list.status_code == 200, own_list.text
+    assert {item["document_id"] for item in own_list.json()["documents"]} == {
+        alpha["document_id"]
+    }
+    assert cross_download.status_code == 404
+    assert audit_read.status_code == 403
+    beta_file = beta["workspace"].upload_directory / f"{beta['document_id']}.pdf"
+    assert beta_file.is_file()
+
+    platform_only = User(
+        email=f"platform-only-{uuid4().hex}@example.invalid",
+        password_hash=hash_password("violet-cactus-orbit-sailed"),
+        is_platform_admin=True,
+    )
+    platform_only_email = platform_only.email
+    with Session(pg_engine) as db:
+        db.add(platform_only)
+        db.flush()
+        platform_only_id = platform_only.id
+        db.commit()
+    test_admin_ids.append(platform_only_id)
+    no_membership_login = client.post(
+        "/auth/login",
+        json={"email": platform_only_email, "password": "violet-cactus-orbit-sailed"},
+    )
+    assert no_membership_login.status_code == 200, no_membership_login.text
+
+    platform_only_body = no_membership_login.json()
+    assert platform_only_body["organisation_id"] is None
+    assert platform_only_body["permissions"] == []
+
+    platform_only_headers = {
+        "Authorization": f"Bearer {platform_only_body['access_token']}"
+    }
+
+    # Independent platform authentication must not grant tenant-content access.
+    platform_only_documents = client.get(
+        "/documents", headers=platform_only_headers
+    )
+    assert platform_only_documents.status_code == 403, platform_only_documents.text
+
+    platform_only_audit = client.get(
+        "/audit/events", headers=platform_only_headers
+    )
+    assert platform_only_audit.status_code == 403, platform_only_audit.text
+
+
+def test_postgres_concurrent_super_admin_revocations_preserve_one_operator(
+    postgres_api_tenant_world, pg_engine
+):
+    """Concurrent mutual revocations serialize and cannot remove every super-admin."""
+    client = postgres_api_tenant_world["client"]
+    alpha = postgres_api_tenant_world["identities"]["alpha"]
+    beta = postgres_api_tenant_world["identities"]["beta"]
+    with Session(pg_engine) as db:
+        db.add_all([
+            PlatformRoleAssignment(
+                user_id=alpha["user_id"],
+                role=PlatformRole.SUPER_ADMINISTRATOR.value,
+                assigned_by_user_id=alpha["user_id"],
+            ),
+            PlatformRoleAssignment(
+                user_id=beta["user_id"],
+                role=PlatformRole.SUPER_ADMINISTRATOR.value,
+                assigned_by_user_id=alpha["user_id"],
+            ),
+        ])
+        db.commit()
+
+        active_legacy_ids = set(db.scalars(
+            select(User.id).where(
+                User.is_active.is_(True),
+                User.is_platform_admin.is_(True),
+            )
+        ).all())
+
+        active_explicit_ids = set(db.scalars(
+            select(PlatformRoleAssignment.user_id)
+            .join(User, User.id == PlatformRoleAssignment.user_id)
+            .where(
+                User.is_active.is_(True),
+                PlatformRoleAssignment.role == PlatformRole.SUPER_ADMINISTRATOR.value,
+            )
+        ).all())
+
+    active_before = active_legacy_ids | active_explicit_ids
+    expected_operators = {alpha["user_id"], beta["user_id"]}
+    assert active_before == expected_operators, (
+        "Concurrency test requires exactly its two synthetic operators; "
+        f"found {len(active_before)} active operators."
+    )
+
+    alpha_login = client.post(
+        "/auth/login",
+        json={"email": alpha["email"], "password": "violet-cactus-orbit-sailed", "auth_scope": "platform"},
+    )
+    beta_login = client.post(
+        "/auth/login",
+        json={"email": beta["email"], "password": "violet-cactus-orbit-sailed", "auth_scope": "platform"},
+    )
+    assert alpha_login.status_code == 200, alpha_login.text
+    assert beta_login.status_code == 200, beta_login.text
+    alpha_headers = {"Authorization": f"Bearer {alpha_login.json()['access_token']}"}
+    beta_headers = {"Authorization": f"Bearer {beta_login.json()['access_token']}"}
+    barrier = Barrier(2)
+
+    def revoke(target_id, headers):
+        barrier.wait(timeout=10)
+        return client.delete(
+            f"/platform/users/{target_id}/roles/platform_super_administrator",
+            headers=headers,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        alpha_revokes_beta = executor.submit(revoke, beta["user_id"], alpha_headers)
+        beta_revokes_alpha = executor.submit(revoke, alpha["user_id"], beta_headers)
+        responses = [alpha_revokes_beta.result(timeout=30), beta_revokes_alpha.result(timeout=30)]
+
+    statuses = [response.status_code for response in responses]
+    assert statuses.count(200) == 1, [response.text for response in responses]
+    assert all(status in {200, 401, 403, 409} for status in statuses), statuses
+    with Session(pg_engine) as db:
+        remaining = set(db.scalars(
+            select(PlatformRoleAssignment.user_id)
+            .join(User, User.id == PlatformRoleAssignment.user_id)
+            .where(
+                User.is_active.is_(True),
+                PlatformRoleAssignment.role == PlatformRole.SUPER_ADMINISTRATOR.value,
+            )
+        ).all())
+    assert len(remaining) == 1, f"Expected exactly one active platform super-admin, found {len(remaining)}"

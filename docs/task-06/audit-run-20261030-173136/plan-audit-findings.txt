@@ -1,0 +1,15 @@
+PASS	Checklist exists	docs/task-06/EKIP_Task06_Test_Implementation_Checklist.md
+PASS	scenario section	found in checklist
+PASS	acceptance criteria mention	found in checklist
+PASS	scope limitation	found in checklist
+PASS	pre/post port checks	found in checklist
+PASS	test commands	found in checklist
+PASS	Playwright spec exists	frontend/e2e/task06-platform.smoke.spec.ts
+PASS	tenant directory / lifecycle states	matching wording found in spec
+PASS	registration / user search / role assignment	matching wording found in spec
+PASS	approval / recovery / retry	matching wording found in spec
+PASS	Test declarations	3 test title(s) found
+PASS	Playwright configuration	task06-smoke config exists
+PASS	Task 06 source documents	32 file(s) found under docs/task-06
+REVIEW REQUIRED	Requirements traceability	7 PDF(s) present; this script does not extract/semantically verify every PDF requirement. Manual/source-aware traceability review remains necessary.
+REVIEW REQUIRED	Semantic requirement coverage	static checks confirm workflow keywords, not that every Task 06 requirement is satisfied; a human must map each authoritative requirement to a test and acceptance criterion

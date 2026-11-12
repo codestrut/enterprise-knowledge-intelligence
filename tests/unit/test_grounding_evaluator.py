@@ -114,6 +114,63 @@ def evaluate_claim(evaluator, claim, evidence):
     )
 
 
+def test_predecomposed_claim_is_grounded_without_second_decomposition():
+    claim = "The organization prioritizes actions for managing cybersecurity risks."
+    evidence = (
+        "Identify, organize, and prioritize actions for managing "
+        "cybersecurity risks."
+    )
+
+    evaluator = make_evaluator(nli_label="entailment")
+
+    class RejectSecondDecomposition:
+        def decompose(self, claim, context=None):
+            raise AssertionError("Already-atomic claim was decomposed again.")
+
+    evaluator.claim_decomposer = RejectSecondDecomposition()
+
+    result = evaluator.evaluate(
+        answer=f"- {claim} [Source 1]",
+        source_map=SOURCE_MAP,
+        source_documents=[
+            {
+                "text": evidence,
+                "metadata": {"page": 1, "chunk_id": 1},
+            }
+        ],
+        decompose_claims=False,
+    )
+
+    assert result[0]["status"] == "grounded"
+    assert result[0]["atomic_claims"][0]["claim"] == claim
+    assert result[0]["atomic_claims"][0]["status"] == "grounded"
+
+
+def test_predecomposed_claim_still_fails_when_evidence_is_neutral():
+    claim = "The organization operates offices in five countries."
+    evaluator = make_evaluator(nli_label="neutral")
+
+    class RejectSecondDecomposition:
+        def decompose(self, claim, context=None):
+            raise AssertionError("Already-atomic claim was decomposed again.")
+
+    evaluator.claim_decomposer = RejectSecondDecomposition()
+
+    result = evaluator.evaluate(
+        answer=f"- {claim} [Source 1]",
+        source_map=SOURCE_MAP,
+        source_documents=[
+            {
+                "text": "The organization uses a cybersecurity risk framework.",
+                "metadata": {"page": 1, "chunk_id": 1},
+            }
+        ],
+        decompose_claims=False,
+    )
+
+    assert result[0]["status"] == "unsupported"
+
+
 def test_supported_claim_is_grounded():
     claim = (
         "An Organizational Profile describes an organization's "

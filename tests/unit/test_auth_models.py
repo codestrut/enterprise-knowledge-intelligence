@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, event, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from src.auth.models import Base, Organisation, OrganisationMembership, User
+from src.auth.models import Base, Organisation, OrganisationMembership, OrganisationInvitation, OrganisationSettings, User
 from src.auth.permissions import Permission, Role
 
 
@@ -63,7 +63,7 @@ def test_membership_role_resolves_through_existing_permission_catalog(session):
 
     assert membership.role is Role.READER
     assert membership.permissions == frozenset(
-        {Permission.DOCUMENTS_READ, Permission.DOCUMENTS_QUERY}
+        {Permission.DOCUMENTS_READ, Permission.DOCUMENTS_QUERY, Permission.TENANT_READ}
     )
 
 
@@ -133,3 +133,39 @@ def test_database_constraint_rejects_plaintext_password_hash_values(session):
             )
         )
         session.commit()
+
+
+def test_invitation_and_settings_models_persist_and_normalize(session):
+    from datetime import UTC, datetime, timedelta
+    import hashlib
+
+    org = Organisation(name="Beta Research", slug="beta-research")
+    admin = make_user("admin@beta.org")
+    session.add_all([org, admin])
+    session.commit()
+
+    token_hash = hashlib.sha256(b"raw-token-123456").hexdigest()
+    expires_at = datetime.now(UTC) + timedelta(days=7)
+
+    invitation = OrganisationInvitation(
+        organisation_id=org.id,
+        recipient_email="  Invitee@Beta.ORG ",
+        role="contributor",
+        token_hash=token_hash,
+        invited_by_user_id=admin.id,
+        expires_at=expires_at,
+    )
+    settings = OrganisationSettings(
+        organisation_id=org.id,
+        allowed_email_domains=["beta.org", "affiliate.org"],
+        session_idle_timeout_minutes=45,
+    )
+    session.add_all([invitation, settings])
+    session.commit()
+
+    assert invitation.recipient_email == "invitee@beta.org"
+    assert invitation.organisation.name == "Beta Research"
+    assert invitation.invited_by.email == "admin@beta.org"
+    assert settings.organisation.slug == "beta-research"
+    assert settings.allowed_email_domains == ["beta.org", "affiliate.org"]
+    assert settings.session_idle_timeout_minutes == 45

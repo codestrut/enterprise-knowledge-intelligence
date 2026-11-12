@@ -335,3 +335,103 @@ def test_acceptance_gate_values_must_be_rates_between_zero_and_one():
     }
     with pytest.raises(ValueError, match="between 0 and 1"):
         validate_suite(suite)
+
+def test_uncited_and_unknown_claim_statuses_are_counted_separately():
+    suite = {
+        "schema_version": 1,
+        "suite_id": "uncited-status-accounting",
+        "corpora": [{"id": "c"}],
+        "query_cases": [{
+            "id": "q1",
+            "corpus_id": "c",
+            "query": "Question?",
+            "answerable": True,
+        }],
+        "grounding_cases": [],
+    }
+
+    result = {
+        "answer": "An answer.",
+        "refused": False,
+        "citations": [{"source_number": 1}],
+        "invalid_citations": [],
+        "grounding": [
+            {
+                "claim": "Mixed claim",
+                "status": "unsupported",
+                "atomic_claims": [
+                    {"status": "grounded"},
+                    {"status": "uncited"},
+                    {"status": "future_status"},
+                    None,
+                ],
+            },
+            {"claim": "Uncited claim", "status": "uncited"},
+            {"claim": "Grounded claim", "status": "grounded"},
+            {"claim": "Unknown claim", "status": "future_status"},
+            None,
+        ],
+    }
+
+    class Pipeline:
+        def query(self, question):
+            return result
+
+    report = run_query_benchmark(suite, lambda _: Pipeline())
+
+    assert report["claim_counts"]["grounded"] == 2
+    assert report["claim_counts"]["uncited"] == 2
+    assert report["claim_counts"]["unknown"] == 2
+    assert report["claim_counts"]["unsupported"] == 0
+
+    assert report["metrics"]["grounded_claim_rate"] == 1 / 3
+    assert report["metrics"]["uncited_claim_rate"] == 1 / 3
+    assert report["metrics"]["fully_grounded_answer_rate_answerable"] == 0.0
+
+    assert report["cases"][0]["fully_grounded"] is False
+
+def test_grounding_report_separates_raw_and_effective_metrics_and_confidence():
+    case = next(
+        item for item in SUITE["grounding_cases"]
+        if item["expected_label"] == "neutral"
+    )
+    suite = {**SUITE, "grounding_cases": [case]}
+
+    class GuardedGrounder:
+        model_name = "test-grounder"
+
+        def check_claim(self, claim, evidence):
+            return {
+                "label": "neutral",
+                "raw_label": "contradiction",
+                "probabilities": {
+                    "contradiction": 0.81,
+                    "neutral": 0.16,
+                    "entailment": 0.03,
+                },
+                "relation_guard": {
+                    "applied": True,
+                    "reason": "test_false_contradiction_downgrade",
+                },
+                "support_guard": {"applied": False},
+            }
+
+    report = run_grounding_benchmark(suite, GuardedGrounder())
+    item = report["cases"][0]
+
+    # Existing metrics must continue to represent the effective label.
+    assert report["metrics"]["accuracy"] == 1.0
+    assert report["metrics"]["false_contradiction_rate"] == 0.0
+
+    # Raw model metrics must expose the original false contradiction.
+    assert report["raw_metrics"]["accuracy"] == 0.0
+    assert report["raw_metrics"]["false_contradiction_rate"] == 1.0
+    assert report["raw_metrics"]["incorrect_cases"] == 1
+
+    # Confidence fields must identify which label each probability describes.
+    assert item["raw_model_confidence"] == 0.81
+    assert item["effective_label_probability"] == 0.16
+
+    # Preserve the previous field and its effective-label meaning.
+    assert item["predicted_label_confidence"] == 0.16
+    assert item["predicted_label_confidence"] == item["effective_label_probability"]

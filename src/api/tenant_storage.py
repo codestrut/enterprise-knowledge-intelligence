@@ -194,6 +194,7 @@ def set_original_filename(knowledge_base: Any, document_id: str, filename: str) 
         metadata = chunk.get("metadata", {})
         if metadata.get("document_id") == document_id:
             metadata["filename"] = filename
+            metadata["source"] = filename
 
 
 @contextmanager

@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "suite_id": "replace-with-customer-or-corpus-suite-id",
+  "description": "Template for corpus-specific test cases using the corpus-agnostic EKIP benchmark runner. Replace all placeholders with human-reviewed cases. Use a separate corpus_id for independent held-out document collections.",
+  "corpora": [
+    {
+      "id": "example-calibration-corpus",
+      "label": "Replace with the development/calibration corpus",
+      "domain": "replace-with-domain",
+      "document_path": "tests/fixtures/calibration-corpus.pdf",
+      "document_format": "pdf",
+      "split": "calibration",
+      "notes": "Use for development and threshold calibration only."
+    },
+    {
+      "id": "example-held-out-corpus",
+      "label": "Replace with an independently selected held-out corpus",
+      "domain": "replace-with-a-different-domain-or-collection",
+      "document_path": "tests/fixtures/held-out-corpus.docx",
+      "document_format": "docx",
+      "split": "held_out",
+      "notes": "Do not use this collection to tune thresholds or prompts."
+    }
+  ],
+  "query_cases": [
+    {
+      "id": "answerable-calibration-001",
+      "corpus_id": "example-calibration-corpus",
+      "domain": "replace-with-domain",
+      "query": "Write a question whose answer is explicitly present in the calibration corpus.",
+      "answerable": true,
+      "split": "calibration",
+      "required_concept_groups": [
+        [
+          "expected phrase",
+          "approved equivalent phrase"
+        ]
+      ]
+    },
+    {
+      "id": "unanswerable-calibration-001",
+      "corpus_id": "example-calibration-corpus",
+      "domain": "replace-with-domain",
+      "query": "Write a plausible question whose answer is not present in the calibration corpus.",
+      "answerable": false,
+      "split": "calibration",
+      "required_concept_groups": []
+    },
+    {
+      "id": "answerable-held-out-001",
+      "corpus_id": "example-held-out-corpus",
+      "domain": "replace-with-a-different-domain-or-collection",
+      "query": "Write a reviewed answerable question from the held-out corpus.",
+      "answerable": true,
+      "split": "held_out",
+      "required_concept_groups": [
+        [
+          "held-out key phrase",
+          "approved equivalent phrase"
+        ]
+      ]
+    },
+    {
+      "id": "unanswerable-held-out-001",
+      "corpus_id": "example-held-out-corpus",
+      "domain": "replace-with-a-different-domain-or-collection",
+      "query": "Write a plausible question whose answer is not present in the held-out corpus.",
+      "answerable": false,
+      "split": "held_out",
+      "required_concept_groups": []
+    }
+  ],
+  "grounding_cases": [],
+  "notes": [
+    "Split is evaluated per query and can inherit from corpus config when omitted.",
+    "Use an independently selected held-out corpus, not only held-out questions from the same files.",
+    "required_concept_groups are exact-alias diagnostics; human review and source-grounded claim evaluation remain necessary.",
+    "The generic runner never applies a universal retrieval score threshold.",
+    "Replace every placeholder and review the expected answerability against the actual source documents before using results as a release gate.",
+    "Acceptance gates are defined per suite, not globally. Adjust these example release targets to the reviewed service contract; do not treat them as universal thresholds for every workload."
+  ],
+  "acceptance_gates": {
+    "minimum_answer_success_rate": 1.0,
+    "minimum_refusal_accuracy": 1.0,
+    "minimum_citation_validity_rate": 1.0
+  }
+}

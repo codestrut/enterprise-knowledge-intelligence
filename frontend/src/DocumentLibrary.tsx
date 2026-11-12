@@ -10,10 +10,11 @@ type UploadState = "idle" | "validating" | "uploading" | "success" | "error" | "
 
 export default function DocumentLibrary() {
   const { documents, status, documentsError, refreshing, lastUpdated, refresh } = useKnowledgeBase();
-  const { permissions } = useAuth();
-  // Fail closed: unknown permissions grant nothing.
-  const canUpload = permissions?.has("documents:upload") ?? false;
-  const canDelete = permissions?.has("documents:delete") ?? false;
+  const { permissions, profile } = useAuth();
+  // Fail closed: unknown permissions grant nothing. Readers cannot upload or delete.
+  const isReader = profile?.role === "reader";
+  const canUpload = !isReader && (permissions?.has("documents:upload") ?? false);
+  const canDelete = !isReader && (permissions?.has("documents:delete") ?? false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [uploadMessage, setUploadMessage] = useState("");
@@ -30,6 +31,8 @@ export default function DocumentLibrary() {
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadController = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLElement | null>(null);
   const uploadSuccessRef = useRef<HTMLDivElement>(null);
   const deleteStatusRef = useRef<HTMLParagraphElement>(null);
   const rowRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -135,11 +138,25 @@ export default function DocumentLibrary() {
 
   function stopWaiting() { uploadController.current?.abort(); }
 
-  function requestDelete(document: DocumentRecord) {
+  function requestDelete(document: DocumentRecord, trigger?: HTMLElement | null) {
+    deleteTriggerRef.current = trigger ?? (document.activeElement as HTMLElement | null);
     setDeleteTarget(document);
     setDialogMessage("");
     setDialogBusy(false);
-    window.requestAnimationFrame(() => { if (dialogRef.current && !dialogRef.current.open) dialogRef.current.showModal(); });
+    window.requestAnimationFrame(() => {
+      if (dialogRef.current && !dialogRef.current.open) {
+        dialogRef.current.showModal();
+        cancelButtonRef.current?.focus();
+      }
+    });
+  }
+
+  function handleDialogClose() {
+    if (!dialogBusy) {
+      setDeleteTarget(null);
+      setDialogMessage("");
+      deleteTriggerRef.current?.focus();
+    }
   }
 
   async function confirmDelete() {
@@ -148,6 +165,7 @@ export default function DocumentLibrary() {
     setDeleting(id); setDialogBusy(true); setDialogMessage(""); setDeleteMessage("");
     try {
       const result = await deleteDocument(id);
+      deleteTriggerRef.current = null;
       dialogRef.current?.close();
       setDeleteTarget(null);
       const name = safeFilename(result.filename || deleteTarget.filename || "Document");
@@ -157,6 +175,7 @@ export default function DocumentLibrary() {
       window.requestAnimationFrame(() => deleteStatusRef.current?.focus());
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 404) {
+        deleteTriggerRef.current = null;
         dialogRef.current?.close(); setDeleteTarget(null);
         setDeleteMessage("This document no longer exists. The library has been refreshed.");
         await refresh();
@@ -194,22 +213,22 @@ export default function DocumentLibrary() {
       {documentsError && <div className="empty-panel error-panel" role="alert"><Icon name="attention"/><div><strong>Could not load documents</strong><p>{documentsError}</p><button className="secondary-button" onClick={() => void runRefresh()} disabled={refreshing}>Retry</button></div></div>}
       {!documentsError && status !== "loading" && documents.length === 0 && <div className="empty-panel"><span className="large-icon"><Icon name="document"/></span><div><strong>No documents indexed</strong><p>Upload a PDF to start asking questions about it.</p></div></div>}
       {!documentsError && documents.length > 0 && <>
-        <div className="desktop-table-wrap"><table className="document-table"><caption className="sr-only">Indexed documents in the knowledge base</caption><thead><tr><th scope="col">Document</th><th scope="col">Status</th>{showPageCount && <th scope="col">Pages</th>}{showChunkCount && <th scope="col">Chunks</th>}{canDelete && <th scope="col"><span className="sr-only">Actions</span></th>}</tr></thead><tbody>{visibleDocuments.map((document) => <DocumentRow key={document.document_id} document={document} showPageCount={showPageCount} showChunkCount={showChunkCount} canDelete={canDelete} disabled={busy || !!deleting} setRef={(node) => { if (document.document_id) rowRefs.current[document.document_id] = node; }} onDelete={() => requestDelete(document)}/>)}</tbody></table></div>
-        <div className="document-cards">{visibleDocuments.map((document) => <article className="document-card" key={document.document_id} tabIndex={-1} ref={(node) => { if (document.document_id) rowRefs.current[document.document_id] = node; }}><div className="document-card-head"><Icon name="document"/><strong title={safeFilename(document.filename)}>{safeFilename(document.filename)}</strong><StatusChip status={document.status}/></div><div className="document-meta">{typeof document.page_count === "number" && <span>{document.page_count} pages</span>}{typeof document.chunk_count === "number" && <span>{document.chunk_count} chunks</span>}</div>{canDelete && <button className="danger-button" type="button" onClick={() => requestDelete(document)} disabled={busy || deleting === document.document_id || !!deleting}><Icon name="trash"/>Delete</button>}</article>)}</div>
+        <div className="desktop-table-wrap"><table className="document-table"><caption className="sr-only">Indexed documents in the knowledge base</caption><thead><tr><th scope="col">Document</th><th scope="col">Status</th>{showPageCount && <th scope="col">Pages</th>}{showChunkCount && <th scope="col">Chunks</th>}{canDelete && <th scope="col"><span className="sr-only">Actions</span></th>}</tr></thead><tbody>{visibleDocuments.map((document) => <DocumentRow key={document.document_id} document={document} showPageCount={showPageCount} showChunkCount={showChunkCount} canDelete={canDelete} disabled={busy || !!deleting} setRef={(node) => { if (document.document_id) rowRefs.current[document.document_id] = node; }} onDelete={(trigger) => requestDelete(document, trigger)}/>)}</tbody></table></div>
+        <div className="document-cards">{visibleDocuments.map((document) => <article className="document-card" key={document.document_id} tabIndex={-1} ref={(node) => { if (document.document_id) rowRefs.current[document.document_id] = node; }}><div className="document-card-head"><Icon name="document"/><strong title={safeFilename(document.filename)}>{safeFilename(document.filename)}</strong><StatusChip status={document.status}/></div><div className="document-meta">{typeof document.page_count === "number" && <span>{document.page_count} pages</span>}{typeof document.chunk_count === "number" && <span>{document.chunk_count} chunks</span>}</div>{canDelete && <button className="danger-button" type="button" onClick={(event) => requestDelete(document, event.currentTarget)} disabled={busy || deleting === document.document_id || !!deleting}><Icon name="trash"/>Delete</button>}</article>)}</div>
         {visibleDocuments.length === 0 && <p className="empty-filter">No documents match “{filter}”.</p>}
       </>}
       {lastUpdated && <p className="last-updated">Last updated {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(lastUpdated)}</p>}
       {deleteMessage && <p ref={deleteStatusRef} className="delete-feedback" role="status" aria-live="polite" tabIndex={-1}>{deleteMessage}</p>}
     </section>
 
-    {canDelete && <dialog className="confirm-dialog" ref={dialogRef} aria-labelledby="delete-dialog-title" onClose={() => { if (!dialogBusy) setDeleteTarget(null); }} onCancel={(event) => { if (dialogBusy) event.preventDefault(); }}>
-      <div className="dialog-icon"><Icon name="trash"/></div><h2 id="delete-dialog-title">Delete document?</h2><p>This removes <strong>{safeFilename(deleteTarget?.filename)}</strong> from the searchable knowledge base.</p><p>The stored PDF will also be removed when the backend can delete it.</p>{dialogMessage && <div className="dialog-error" role="alert">{dialogMessage}</div>}<div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => dialogRef.current?.close()} disabled={dialogBusy}>Cancel</button><button type="button" className="danger-confirm" onClick={() => void confirmDelete()} disabled={dialogBusy || busy}>{dialogBusy ? "Deleting…" : "Delete document"}</button></div>
+    {canDelete && <dialog className="confirm-dialog" ref={dialogRef} aria-labelledby="delete-dialog-title" aria-describedby="delete-dialog-description" onClose={handleDialogClose} onCancel={(event) => { if (dialogBusy) { event.preventDefault(); } else { dialogRef.current?.close(); } }} onKeyDown={(event) => { if (event.key === "Escape" && !dialogBusy) { event.preventDefault(); dialogRef.current?.close(); } }}>
+      <div className="dialog-icon"><Icon name="trash"/></div><h2 id="delete-dialog-title">Delete document?</h2><p id="delete-dialog-description">This removes <strong>{safeFilename(deleteTarget?.filename)}</strong> from the searchable knowledge base.</p><p>The stored PDF will also be removed when the backend can delete it.</p>{dialogMessage && <div className="dialog-error" role="alert">{dialogMessage}</div>}<div className="dialog-actions"><button ref={cancelButtonRef} type="button" className="secondary-button" onClick={() => dialogRef.current?.close()} disabled={dialogBusy}>Cancel</button><button type="button" className="danger-confirm" onClick={() => void confirmDelete()} disabled={dialogBusy || busy}>{dialogBusy ? "Deleting…" : "Delete document"}</button></div>
     </dialog>}
   </main>;
 }
 
-function DocumentRow({ document, showPageCount, showChunkCount, canDelete, disabled, setRef, onDelete }: { document: DocumentRecord; showPageCount: boolean; showChunkCount: boolean; canDelete: boolean; disabled: boolean; setRef: (node: HTMLElement | null) => void; onDelete: () => void }) {
-  return <tr ref={setRef} tabIndex={-1}><th scope="row"><span className="table-file"><Icon name="document"/><span title={safeFilename(document.filename)}>{safeFilename(document.filename)}</span></span></th><td><StatusChip status={document.status}/></td>{showPageCount && <td>{typeof document.page_count === "number" ? document.page_count : "—"}</td>}{showChunkCount && <td>{typeof document.chunk_count === "number" ? document.chunk_count : "—"}</td>}{canDelete && <td><button className="danger-button" type="button" onClick={onDelete} disabled={disabled}><Icon name="trash"/>Delete</button></td>}</tr>;
+function DocumentRow({ document, showPageCount, showChunkCount, canDelete, disabled, setRef, onDelete }: { document: DocumentRecord; showPageCount: boolean; showChunkCount: boolean; canDelete: boolean; disabled: boolean; setRef: (node: HTMLElement | null) => void; onDelete: (trigger: HTMLElement | null) => void }) {
+  return <tr ref={setRef} tabIndex={-1}><th scope="row"><span className="table-file"><Icon name="document"/><span title={safeFilename(document.filename)}>{safeFilename(document.filename)}</span></span></th><td><StatusChip status={document.status}/></td>{showPageCount && <td>{typeof document.page_count === "number" ? document.page_count : "—"}</td>}{showChunkCount && <td>{typeof document.chunk_count === "number" ? document.chunk_count : "—"}</td>}{canDelete && <td><button className="danger-button" type="button" onClick={(event) => onDelete(event.currentTarget)} disabled={disabled}><Icon name="trash"/>Delete</button></td>}</tr>;
 }
 
 function StatusChip({ status }: { status?: string | null }) {

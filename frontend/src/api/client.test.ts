@@ -1,8 +1,56 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiRequestError, deleteDocument, getCurrentUser, getDocuments, getHealth, login, logout, postQuery, readApiDetail, setAccessToken, uploadDocument } from "./client";
+import { ApiRequestError, assignPlatformRole, deleteDocument, getCurrentUser, getDocuments, getHealth, getPlatformAuditEvents, getPlatformOverview, getPlatformRoleHolders, login, logout, postQuery, reactivatePlatformOrganisation, readApiDetail, revokePlatformRole, searchPlatformUsers, setAccessToken, suspendPlatformOrganisation, uploadDocument } from "./client";
 import emptyDocuments from "../test-fixtures/documents-empty.json";
 
 afterEach(() => { setAccessToken(null); vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+describe("platform administration API client", () => {
+  it("validates the aggregate platform overview response", async () => {
+    const body = { total_tenants: 3, active_tenants: 2, pending_tenants: 0, provisioning_tenants: 1, failed_tenants: 0, suspended_tenants: 0, total_documents: 12, total_chunks: 98 };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(getPlatformOverview()).resolves.toEqual(body);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/platform/overview");
+  });
+
+  it("loads platform role holders and revokes a selected assignment", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return Promise.resolve(new Response(JSON.stringify({ count: 1, assignments: [{ id: "assignment-1", user_id: "user-1", email: "admin@example.test", role: "platform_tenant_creator", assigned_at: "2026-01-01T00:00:00Z" }] }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(getPlatformRoleHolders()).resolves.toMatchObject({ count: 1, assignments: [{ user_id: "user-1", role: "platform_tenant_creator" }] });
+    await revokePlatformRole("user-1", "platform_tenant_creator");
+    expect(calls[1].url).toBe("/api/platform/users/user-1/roles/platform_tenant_creator");
+    expect(calls[1].init?.method).toBe("DELETE");
+  });
+
+  it("filters platform audit details to the server-reviewed operational allowlist", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      count: 1,
+      events: [{ id: "event-1", actor_user_id: null, organisation_id: "org-1", event_type: "platform.role_revoked", target_type: "user", target_id: "user-1", occurred_at: "2026-01-01T00:00:00Z", details: { action: "platform.role_revoked", outcome: "success", role: "platform_tenant_creator", query_text: "private question", document_name: "confidential.pdf", nested: { secret: "not allowed" } } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await getPlatformAuditEvents();
+    expect(result.events[0].details).toEqual({ action: "platform.role_revoked", outcome: "success", role: "platform_tenant_creator" });
+  });
+
+  it("sends reason codes for tenant suspension and reactivation", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await suspendPlatformOrganisation("org/1", "security_review");
+    await reactivatePlatformOrganisation("org/1", "review_cleared");
+    expect(calls[0].url).toBe("/api/platform/organisations/org%2F1/suspend");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ reason_code: "security_review" });
+    expect(calls[1].url).toBe("/api/platform/organisations/org%2F1/reactivate");
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ reason_code: "review_cleared" });
+  });
+});
 
 describe("authentication API client", () => {
   it("keeps access and refresh credentials out of the login return value and browser storage", async () => {
@@ -12,6 +60,29 @@ describe("authentication API client", () => {
     expect(JSON.stringify(fetchMock.mock.results)).not.toContain("access-secret-test");
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("supports independent platform-only login and a profile without tenant scope", async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      // Keep the mocked fetch call tuple aligned with the real fetch signature,
+      // so the test can inspect the serialized login request body safely.
+      void init;
+      const payload = url === "/api/auth/login"
+        ? { access_token: "platform-access", token_type: "bearer", expires_in: 600, refresh_token: "platform-refresh", organisation_id: null, role: "reader", permissions: [] }
+        : { email: "platform@example.test", organisation: null, role: "reader", permissions: [], platform_permissions: ["organisations:read"] };
+      return Promise.resolve(new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await login("platform@example.test", "test-password", undefined, "platform");
+    const loginBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(loginBody.auth_scope).toBe("platform");
+    await expect(getCurrentUser()).resolves.toMatchObject({
+      email: "platform@example.test", organisation: null, permissions: [], platform_permissions: ["organisations:read"],
+    });
   });
 
   it("refreshes a safe request once and retries it with the rotated access token", async () => {
@@ -85,7 +156,7 @@ describe("authentication API client", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ email: "reader@example.test", organisation: { id: "org-1", name: "Research Group" }, role: "reader", permissions: ["documents:read"] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     setAccessToken("memory-only-access-token");
-    await expect(getCurrentUser()).resolves.toEqual({ email: "reader@example.test", organisation: { id: "org-1", name: "Research Group" }, role: "reader", permissions: ["documents:read"] });
+    await expect(getCurrentUser()).resolves.toEqual({ email: "reader@example.test", organisation: { id: "org-1", name: "Research Group" }, role: "reader", permissions: ["documents:read"], platform_permissions: [] });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/me");
     expect(new Headers(fetchMock.mock.calls[0][1].headers).get("Authorization")).toBe("Bearer memory-only-access-token");
   });
@@ -254,5 +325,104 @@ describe("shared document API client", () => {
   it("removes absolute server paths from API error text", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: "Could not parse /srv/ekip/private/document.pdf" }), { status: 400 })));
     await expect(getDocuments()).rejects.toThrow("Could not parse document.pdf");
+  });
+
+  it("extracts request_id from JSON error response body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "Internal error", request_id: "req-abc-123" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    try {
+      await postQuery({ question: "q", top_k: 5 }, new AbortController().signal);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiRequestError);
+      expect((error as ApiRequestError).requestId).toBe("req-abc-123");
+      expect((error as ApiRequestError).status).toBe(500);
+    }
+  });
+
+  it("extracts request_id from X-Request-ID response header if body lacks one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "Gateway failure" }), {
+          status: 502,
+          headers: { "Content-Type": "application/json", "X-Request-ID": "hdr-xyz-789" },
+        }),
+      ),
+    );
+    try {
+      await postQuery({ question: "q", top_k: 5 }, new AbortController().signal);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiRequestError);
+      expect((error as ApiRequestError).requestId).toBe("hdr-xyz-789");
+    }
+  });
+
+  it("leaves requestId undefined when no request-ID is returned", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "Bad request" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    try {
+      await postQuery({ question: "q", top_k: 5 }, new AbortController().signal);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiRequestError);
+      expect((error as ApiRequestError).requestId).toBeUndefined();
+    }
+  });
+});
+
+
+describe("platform administration API", () => {
+  it("searches platform users with the authenticated client", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      count: 1,
+      users: [{ id: "user-1", email: "owner@example.test", is_active: true }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    setAccessToken("memory-only-access-token");
+
+    await expect(searchPlatformUsers(" owner ", 10)).resolves.toEqual({
+      count: 1,
+      users: [{ id: "user-1", email: "owner@example.test", is_active: true }],
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/platform/users?q=owner&limit=10");
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("Authorization"))
+      .toBe("Bearer memory-only-access-token");
+  });
+
+  it("submits role assignments and returns duplicate-assignment status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      user_id: "user-1",
+      role: "platform_tenant_creator",
+      already_assigned: true,
+    }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    setAccessToken("memory-only-access-token");
+
+    await expect(assignPlatformRole("user-1", "platform_tenant_creator")).resolves.toEqual({
+      user_id: "user-1",
+      role: "platform_tenant_creator",
+      already_assigned: true,
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/platform/users/roles");
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      user_id: "user-1",
+      role: "platform_tenant_creator",
+    });
   });
 });

@@ -438,11 +438,26 @@ class RAGPipeline:
                             answer=subset_answer,
                             source_map=source_map,
                         )
-                        subset_grounding = self.grounding_evaluator.evaluate(
-                            answer=subset_answer,
-                            source_map=source_map,
-                            source_documents=retrieved_documents,
+                        predecomposed_evaluator = getattr(
+                            self.grounding_evaluator,
+                            "evaluate_predecomposed",
+                            None,
                         )
+
+                        if callable(predecomposed_evaluator):
+                            subset_grounding = predecomposed_evaluator(
+                                subset_answer,
+                                source_map,
+                                retrieved_documents,
+                            )
+                        else:
+                            # Preserve compatibility with injected evaluators
+                            # implementing the original three-argument API.
+                            subset_grounding = self.grounding_evaluator.evaluate(
+                                subset_answer,
+                                source_map,
+                                retrieved_documents,
+                            )
                         subset_accepted = answer_passes_grounding(
                             subset_answer,
                             subset_grounding,

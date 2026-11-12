@@ -11,14 +11,17 @@ import secrets
 import re
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from src.auth.models import (
     AuditEvent,
     Organisation,
     OrganisationMembership,
+    OrganisationSettings,
     RefreshSessionRecord,
+    TenantOnboarding,
+    PlatformRoleAssignment,
     User,
 )
 from src.auth.passwords import hash_password, verify_password
@@ -92,10 +95,12 @@ def authenticate_managed_user(
         rows = db.execute(
             select(OrganisationMembership, Organisation)
             .join(Organisation, Organisation.id == OrganisationMembership.organisation_id)
+            .outerjoin(TenantOnboarding, TenantOnboarding.organisation_id == Organisation.id)
             .where(
                 OrganisationMembership.user_id == user_id,
                 OrganisationMembership.is_active.is_(True),
                 Organisation.is_active.is_(True),
+                or_(TenantOnboarding.id.is_(None), TenantOnboarding.status == "active"),
             )
             .order_by(Organisation.id)
         ).all()
@@ -108,12 +113,34 @@ def authenticate_managed_user(
             db.rollback()
 
 
+def _session_idle_timeout(db: Session, membership_id: UUID | None) -> timedelta:
+    """Resolve the current tenant idle timeout; platform sessions use the default."""
+    if membership_id is None:
+        return DEFAULT_SESSION_IDLE_TIMEOUT
+    organisation_id = db.scalar(
+        select(OrganisationMembership.organisation_id).where(
+            OrganisationMembership.id == membership_id
+        )
+    )
+    if organisation_id is None:
+        return DEFAULT_SESSION_IDLE_TIMEOUT
+    minutes = db.scalar(
+        select(OrganisationSettings.session_idle_timeout_minutes).where(
+            OrganisationSettings.organisation_id == organisation_id
+        )
+    )
+    if minutes is None:
+        return DEFAULT_SESSION_IDLE_TIMEOUT
+    return timedelta(minutes=int(minutes))
+
+
 def login_managed_user(
     db: Session,
     email: object,
     password: object,
     *,
     organisation_id: UUID | None = None,
+    platform_scope: bool = False,
     now: datetime | None = None,
 ) -> LoginResult:
     """Authenticate and create a bounded, membership-scoped session."""
@@ -134,46 +161,58 @@ def login_managed_user(
             query = (
                 select(OrganisationMembership, Organisation)
                 .join(Organisation, Organisation.id == OrganisationMembership.organisation_id)
+                .outerjoin(TenantOnboarding, TenantOnboarding.organisation_id == Organisation.id)
                 .where(
                     OrganisationMembership.user_id == user_id,
                     OrganisationMembership.is_active.is_(True),
                     Organisation.is_active.is_(True),
+                    or_(TenantOnboarding.id.is_(None), TenantOnboarding.status == "active"),
                 )
                 .order_by(Organisation.id)
-                .with_for_update()
+                .with_for_update(of=(OrganisationMembership, Organisation))
             )
             rows = db.execute(query).all()
-            resolved = _principal_or_selection(rows, organisation_id)
-            if isinstance(resolved, OrganisationSelection):
-                result = resolved
+            is_platform_operator = _is_platform_operator(db, user)
+            if platform_scope:
+                if not is_platform_operator or organisation_id is not None:
+                    raise AuthenticationError
+                result = _create_platform_session(db, user, current_time)
+            elif not rows and is_platform_operator:
+                # Platform-only operators have no tenant identity to select.
+                result = _create_platform_session(db, user, current_time)
             else:
-                family_expiry = current_time + DEFAULT_SESSION_FAMILY_LIFETIME
-                expiry = min(current_time + DEFAULT_SESSION_IDLE_TIMEOUT, family_expiry)
-                refresh_token = secrets.token_urlsafe(32)
-                family_id = uuid4()
-                record = RefreshSessionRecord(
-                    user_id=user.id,
-                    membership_id=resolved.membership_id,
-                    token_hash=_token_hash(refresh_token),
-                    family_id=family_id,
-                    created_at=current_time,
-                    last_used_at=current_time,
-                    expires_at=expiry,
-                    family_expires_at=family_expiry,
-                )
-                db.add(record)
-                db.flush()
-                db.add(
-                    AuditEvent(
-                        actor_user_id=user.id,
-                        organisation_id=resolved.organisation_id,
-                        event_type="auth.session_created",
-                        target_type="refresh_session",
-                        target_id=str(record.id),
-                        details={"action": "login", "outcome": "success", "membership_id": str(resolved.membership_id)},
+                resolved = _principal_or_selection(rows, organisation_id)
+                if isinstance(resolved, OrganisationSelection):
+                    result = resolved
+                else:
+                    family_expiry = current_time + DEFAULT_SESSION_FAMILY_LIFETIME
+                    idle_timeout = _session_idle_timeout(db, resolved.membership_id)
+                    expiry = min(current_time + idle_timeout, family_expiry)
+                    refresh_token = secrets.token_urlsafe(32)
+                    family_id = uuid4()
+                    record = RefreshSessionRecord(
+                        user_id=user.id,
+                        membership_id=resolved.membership_id,
+                        token_hash=_token_hash(refresh_token),
+                        family_id=family_id,
+                        created_at=current_time,
+                        last_used_at=current_time,
+                        expires_at=expiry,
+                        family_expires_at=family_expiry,
                     )
-                )
-                result = SessionGrant(resolved, family_id, refresh_token, expiry)
+                    db.add(record)
+                    db.flush()
+                    db.add(
+                        AuditEvent(
+                            actor_user_id=user.id,
+                            organisation_id=resolved.organisation_id,
+                            event_type="auth.session_created",
+                            target_type="refresh_session",
+                            target_id=str(record.id),
+                            details={"action": "login", "outcome": "success", "membership_id": str(resolved.membership_id)},
+                        )
+                    )
+                    result = SessionGrant(resolved, family_id, refresh_token, expiry)
     except AuthenticationError:
         db.rollback()
         _record_failed_login(db, email, organisation_id)
@@ -184,6 +223,83 @@ def login_managed_user(
 
     assert result is not None
     return result
+
+
+def login_platform_operator(
+    db: Session,
+    email: object,
+    password: object,
+    *,
+    now: datetime | None = None,
+) -> SessionGrant:
+    """Authenticate and create an independent, platform-scoped session."""
+    current_time = _utc_datetime(now)
+    try:
+        user_id, verified_hash = _verify_credentials(db, email, password)
+        with db.begin():
+            user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+            if user is None or not user.is_active or user.password_hash != verified_hash:
+                raise AuthenticationError
+            if not _is_platform_operator(db, user):
+                raise AuthenticationError
+            return _create_platform_session(db, user, current_time)
+    except AuthenticationError:
+        db.rollback()
+        _record_failed_login(db, email, None)
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _is_platform_operator(db: Session, user: User) -> bool:
+    return user.is_platform_admin is True or db.scalar(
+        select(PlatformRoleAssignment.id)
+        .where(PlatformRoleAssignment.user_id == user.id)
+        .limit(1)
+    ) is not None
+
+
+def _platform_principal(user: User) -> AuthenticatedPrincipal:
+    return AuthenticatedPrincipal(
+        user_id=user.id,
+        membership_id=UUID(int=0),
+        organisation_id=UUID(int=0),
+        role=Role.READER,
+        permissions=frozenset(),
+    )
+
+
+def _create_platform_session(
+    db: Session, user: User, current_time: datetime
+) -> SessionGrant:
+    family_expiry = current_time + DEFAULT_SESSION_FAMILY_LIFETIME
+    expiry = min(current_time + DEFAULT_SESSION_IDLE_TIMEOUT, family_expiry)
+    refresh_token = secrets.token_urlsafe(32)
+    family_id = uuid4()
+    record = RefreshSessionRecord(
+        user_id=user.id,
+        membership_id=None,
+        token_hash=_token_hash(refresh_token),
+        family_id=family_id,
+        created_at=current_time,
+        last_used_at=current_time,
+        expires_at=expiry,
+        family_expires_at=family_expiry,
+    )
+    db.add(record)
+    db.flush()
+    db.add(
+        AuditEvent(
+            actor_user_id=user.id,
+            organisation_id=None,
+            event_type="auth.platform_session_created",
+            target_type="refresh_session",
+            target_id=str(record.id),
+            details={"action": "platform_login", "outcome": "success"},
+        )
+    )
+    return SessionGrant(_platform_principal(user), family_id, refresh_token, expiry)
 
 
 def rotate_refresh_session(
@@ -207,17 +323,54 @@ def rotate_refresh_session(
 
     try:
         token_hash = _token_hash(refresh_token)
-        # Lock order: family lock, then token row, then user/membership/organisation,
-        # then remaining family rows. family_id never changes, so reading it
-        # unlocked is safe; the token row is re-read and locked after the family lock.
-        family_id = db.scalar(
-            select(RefreshSessionRecord.family_id).where(
-                RefreshSessionRecord.token_hash == token_hash
-            )
-        )
-        if family_id is None:
+        # Read the immutable session locator without a row lock. Tenant sessions
+        # lock their organisation before the family advisory lock, matching the
+        # lock order used by tenant suspension and logout.
+        locator = db.execute(
+            select(
+                RefreshSessionRecord.family_id,
+                RefreshSessionRecord.membership_id,
+            ).where(RefreshSessionRecord.token_hash == token_hash)
+        ).one_or_none()
+        if locator is None:
             db.rollback()
             raise AuthenticationError
+
+        family_id = locator.family_id
+        membership_id = locator.membership_id
+
+        # Tenant suspension takes the organisation lock before revoking refresh
+        # records. Acquire that same lock before the family/token locks here.
+        # This serialises refresh rotation with suspension and prevents a
+        # concurrent rotation from surviving tenant reactivation.
+        if membership_id is not None:
+            organisation_id = db.scalar(
+                select(OrganisationMembership.organisation_id).where(
+                    OrganisationMembership.id == membership_id
+                )
+            )
+            if organisation_id is None:
+                db.rollback()
+                raise AuthenticationError
+
+            organisation = db.scalar(
+                select(Organisation)
+                .where(Organisation.id == organisation_id)
+                .with_for_update()
+            )
+            if organisation is None or not organisation.is_active:
+                db.rollback()
+                raise AuthenticationError
+
+            onboarding_status = db.scalar(
+                select(TenantOnboarding.status).where(
+                    TenantOnboarding.organisation_id == organisation_id
+                )
+            )
+            if onboarding_status is not None and onboarding_status != "active":
+                db.rollback()
+                raise AuthenticationError
+
         _lock_family(db, family_id)
         record = db.scalar(
             select(RefreshSessionRecord)
@@ -227,6 +380,7 @@ def rotate_refresh_session(
         if record is None:
             db.rollback()
             raise AuthenticationError
+        idle_timeout = _session_idle_timeout(db, record.membership_id)
 
         if record.revoked_at is not None:
             if record.replaced_by_id is not None and key_hash is not None and hmac.compare_digest(
@@ -240,18 +394,28 @@ def rotate_refresh_session(
                 user, membership, organisation = _lock_active_scope(
                     db, record.user_id, record.membership_id
                 )
-                if (
+                platform_scope = record.membership_id is None and user is not None and _is_platform_operator(db, user)
+                tenant_scope = record.membership_id is not None and membership is not None and organisation is not None
+                replacement_scope_matches = (
                     replacement is not None
+                    and ((platform_scope and replacement.membership_id is None)
+                         or (tenant_scope and replacement.membership_id == membership.id))
+                )
+                if (
+                    replacement_scope_matches
+                    and replacement is not None
                     and replacement.revoked_at is None
                     and _stored_utc(replacement.expires_at) > current_time
                     and _stored_utc(replacement.family_expires_at) > current_time
-                    and _stored_utc(replacement.last_used_at) + DEFAULT_SESSION_IDLE_TIMEOUT
+                    and _stored_utc(replacement.last_used_at) + idle_timeout
                     > current_time
                     and user is not None
-                    and membership is not None
-                    and organisation is not None
                 ):
-                    principal = _principal_for_user(user, membership, organisation)
+                    principal = (
+                        _platform_principal(user)
+                        if platform_scope
+                        else _principal_for_user(user, membership, organisation)
+                    )
                     recovered = _derive_replacement_token(refresh_token, rotation_key)
                     if hmac.compare_digest(replacement.token_hash, _token_hash(recovered)):
                         db.rollback()
@@ -288,7 +452,7 @@ def rotate_refresh_session(
         if (
             _stored_utc(record.expires_at) <= current_time
             or _stored_utc(record.family_expires_at) <= current_time
-            or _stored_utc(record.last_used_at) + DEFAULT_SESSION_IDLE_TIMEOUT <= current_time
+            or _stored_utc(record.last_used_at) + idle_timeout <= current_time
         ):
             _revoke_family(db, record.family_id, current_time)
             db.add(
@@ -307,7 +471,11 @@ def rotate_refresh_session(
         user, membership, organisation = _lock_active_scope(
             db, record.user_id, record.membership_id
         )
-        if user is None or membership is None or organisation is None:
+        if (
+            user is None
+            or (record.membership_id is not None and (membership is None or organisation is None))
+            or (record.membership_id is None and not _is_platform_operator(db, user))
+        ):
             _revoke_family(db, record.family_id, current_time)
             db.add(
                 AuditEvent(
@@ -324,10 +492,10 @@ def rotate_refresh_session(
 
         raw_token = _derive_replacement_token(refresh_token, rotation_key)
         family_expiry = _stored_utc(record.family_expires_at)
-        expiry = min(current_time + DEFAULT_SESSION_IDLE_TIMEOUT, family_expiry)
+        expiry = min(current_time + idle_timeout, family_expiry)
         replacement = RefreshSessionRecord(
             user_id=user.id,
-            membership_id=membership.id,
+            membership_id=membership.id if membership is not None else None,
             token_hash=_token_hash(raw_token),
             family_id=record.family_id,
             created_at=current_time,
@@ -344,14 +512,19 @@ def rotate_refresh_session(
         db.add(
             AuditEvent(
                 actor_user_id=user.id,
-                organisation_id=organisation.id,
+                organisation_id=organisation.id if organisation is not None else None,
                 event_type="auth.session_rotated",
                 target_type="refresh_session",
                 target_id=str(replacement.id),
                 details={"action": "refresh", "outcome": "success", "family_id": str(record.family_id)},
             )
         )
-        principal = _principal_for_user(user, membership, organisation)
+        from src.auth.permissions import Role
+        principal = (
+            _principal_for_user(user, membership, organisation)
+            if membership is not None and organisation is not None
+            else _platform_principal(user)
+        )
         db.commit()
         return SessionGrant(principal, record.family_id, raw_token, expiry)
     except AuthenticationError:
@@ -369,15 +542,20 @@ def revoke_refresh_session(
         return
     try:
         token_hash = _token_hash(refresh_token)
-        family_id = db.scalar(
-            select(RefreshSessionRecord.family_id).where(
-                RefreshSessionRecord.token_hash == token_hash
-            )
-        )
-        if family_id is None:
+        locator = db.execute(
+            select(
+                RefreshSessionRecord.family_id,
+                RefreshSessionRecord.membership_id,
+            ).where(RefreshSessionRecord.token_hash == token_hash)
+        ).one_or_none()
+        if locator is None:
             db.rollback()
             return
-        _lock_family(db, family_id)
+
+        organisation_id = _lock_organisation_for_membership(
+            db, locator.membership_id
+        )
+        _lock_family(db, locator.family_id)
         record = db.scalar(
             select(RefreshSessionRecord)
             .where(RefreshSessionRecord.token_hash == token_hash)
@@ -389,7 +567,7 @@ def revoke_refresh_session(
             db.add(
                 AuditEvent(
                     actor_user_id=record.user_id,
-                    organisation_id=_organisation_for_membership(db, record.membership_id),
+                    organisation_id=organisation_id,
                     event_type="auth.session_revoked",
                     target_type="refresh_session",
                     target_id=str(record.id),
@@ -410,6 +588,13 @@ def revoke_refresh_family(
     """Revoke every active refresh record in an authenticated session family."""
     current_time = _utc_datetime(now)
     try:
+        membership_id = db.scalar(
+            select(RefreshSessionRecord.membership_id)
+            .where(RefreshSessionRecord.family_id == family_id)
+            .order_by(RefreshSessionRecord.id)
+            .limit(1)
+        )
+        organisation_id = _lock_organisation_for_membership(db, membership_id)
         _lock_family(db, family_id)
         records = list(
             db.scalars(
@@ -428,7 +613,7 @@ def revoke_refresh_family(
             db.add(
                 AuditEvent(
                     actor_user_id=records[0].user_id,
-                    organisation_id=_organisation_for_membership(db, records[0].membership_id),
+                    organisation_id=organisation_id,
                     event_type="auth.session_family_revoked",
                     target_type="refresh_session_family",
                     target_id=str(family_id),
@@ -503,12 +688,34 @@ def _record_failed_login(
         raise AuditPersistenceError("Required authentication audit could not be persisted.") from exc
 
 
-def _organisation_for_membership(db: Session, membership_id: UUID) -> UUID | None:
+def _organisation_for_membership(db: Session, membership_id: UUID | None) -> UUID | None:
+    if membership_id is None:
+        return None
     return db.scalar(
         select(OrganisationMembership.organisation_id).where(
             OrganisationMembership.id == membership_id
         )
     )
+
+
+def _lock_organisation_for_membership(
+    db: Session, membership_id: UUID | None
+) -> UUID | None:
+    """Lock a tenant organisation before a refresh-family lock, if applicable.
+
+    This is a coordination lock, not an authorisation check. Logout and
+    revocation must remain possible when an organisation is suspended.
+    """
+    organisation_id = _organisation_for_membership(db, membership_id)
+    if organisation_id is None:
+        return None
+
+    locked_id = db.scalar(
+        select(Organisation.id)
+        .where(Organisation.id == organisation_id)
+        .with_for_update()
+    )
+    return organisation_id if locked_id is not None else None
 
 
 def _principal_or_selection(rows, organisation_id: UUID | None) -> LoginResult:
@@ -558,9 +765,13 @@ def _principal_for_user(
 
 
 def _lock_active_scope(
-    db: Session, user_id: UUID, membership_id: UUID
+    db: Session, user_id: UUID, membership_id: UUID | None
 ) -> tuple[User | None, OrganisationMembership | None, Organisation | None]:
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if user is None or not user.is_active:
+        return None, None, None
+    if membership_id is None:
+        return user, None, None
     membership = db.scalar(
         select(OrganisationMembership)
         .where(
@@ -570,7 +781,7 @@ def _lock_active_scope(
         )
         .with_for_update()
     )
-    if user is None or not user.is_active or membership is None:
+    if membership is None:
         return None, None, None
     organisation = db.scalar(
         select(Organisation)
@@ -578,6 +789,13 @@ def _lock_active_scope(
         .with_for_update()
     )
     if organisation is None or not organisation.is_active:
+        return None, None, None
+    onboarding_status = db.scalar(
+        select(TenantOnboarding.status).where(
+            TenantOnboarding.organisation_id == organisation.id
+        )
+    )
+    if onboarding_status is not None and onboarding_status != "active":
         return None, None, None
     return user, membership, organisation
 
