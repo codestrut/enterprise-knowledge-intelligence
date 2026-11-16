@@ -292,6 +292,7 @@ describe("shared application shell and routes", () => {
 
     // Tenant records now load when the Tenant lifecycle tab is selected.
     fireEvent.click(screen.getByRole("tab", { name: "Tenant lifecycle" }));
+    expect(window.location.pathname).toBe("/platform/organisations");
 
     expect(await screen.findByText("Platform Test Organisation")).toBeTruthy();
     expect(screen.getByText("platform-test")).toBeTruthy();
@@ -315,6 +316,80 @@ describe("shared application shell and routes", () => {
     expect(screen.queryByRole("heading", { name: "Tenant administration" })).toBeNull();
     expect(fetchMock).not.toHaveBeenCalledWith("/api/platform/organisations", expect.anything());
     expect(screen.queryByRole("link", { name: /Platform administration/i })).toBeNull();
+  });
+
+  it("allows a platform role manager to open the access route without organisations:read", async () => {
+    window.history.replaceState({}, "", "/platform/access");
+
+    const profile = {
+      ...authenticatedTestProfile,
+      platform_permissions: ["platform-roles:assign"],
+    };
+    const fetchMock = vi.fn((input: string) => {
+      if (input === "/api/health") {
+        return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+      }
+      if (input === "/api/documents") {
+        return Promise.resolve(new Response(JSON.stringify({ count: 0, documents: [] }), { status: 200 }));
+      }
+      if (input === "/api/platform/users/roles") {
+        return Promise.resolve(new Response(JSON.stringify({ count: 0, assignments: [] }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ detail: "Unexpected request" }), { status: 404 }));
+    });
+
+    vi.stubGlobal("fetch", withAuthenticatedProfile(fetchMock, profile));
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Assign platform roles" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Access & roles" }).getAttribute("aria-selected")).toBe("true");
+    expect(fetchMock).toHaveBeenCalledWith("/api/platform/users/roles", expect.anything());
+  });
+
+  it("allows a platform auditor to open the audit route without organisations:read", async () => {
+    window.history.replaceState({}, "", "/platform/audit");
+
+    const profile = {
+      ...authenticatedTestProfile,
+      platform_permissions: ["platform-audit:read"],
+    };
+    const fetchMock = vi.fn((input: string) => {
+      if (input === "/api/health") {
+        return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+      }
+      if (input === "/api/documents") {
+        return Promise.resolve(new Response(JSON.stringify({ count: 0, documents: [] }), { status: 200 }));
+      }
+      if (input.startsWith("/api/platform/audit/events")) {
+        return Promise.resolve(new Response(JSON.stringify({ count: 0, events: [] }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ detail: "Unexpected request" }), { status: 404 }));
+    });
+
+    vi.stubGlobal("fetch", withAuthenticatedProfile(fetchMock, profile));
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Platform audit events" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Platform audit" }).getAttribute("aria-selected")).toBe("true");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/platform/audit/events"))).toBe(true);
+  });
+
+  it("denies direct access to a platform section when its specific permission is missing", async () => {
+    window.history.replaceState({}, "", "/platform/access");
+
+    const profile = {
+      ...authenticatedTestProfile,
+      platform_permissions: ["organisations:read"],
+    };
+    const fetchMock = vi.fn((input: string) => Promise.resolve(
+      new Response(JSON.stringify(input === "/api/health" ? { status: "ok" } : { count: 0, documents: [] }), { status: 200 })
+    ));
+
+    vi.stubGlobal("fetch", withAuthenticatedProfile(fetchMock, profile));
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Access is forbidden" })).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/platform/users/roles", expect.anything());
   });
 
   it("routes tenant readers to the organisation overview and exposes only granted admin sections", async () => {

@@ -29,13 +29,26 @@ function RoutedApp() {
       "/library": "Document Management",
       "/workspace": "Knowledge Workspace",
       "/platform": "Platform Administration",
+      "/platform/organisations": "Organisation Management",
+      "/platform/access": "Platform Access and Roles",
+      "/platform/audit": "Platform Audit",
       "/tenant/settings": "Organisation Administration",
       "/403": "Access Forbidden",
       "/forbidden": "Access Forbidden",
     };
-    const canReadPlatform = auth.profile?.platform_permissions?.includes("organisations:read") === true;
-    const isPlatformHome = path === "/" && auth.profile?.organisation === null && canReadPlatform;
-    const title = path === "/platform" && auth.status !== "unknown" && auth.status !== "signedOut" && !canReadPlatform
+    const platformPermissions = auth.profile?.platform_permissions ?? [];
+    const requiredPlatformPermission: Record<string, string> = {
+      "/platform": "organisations:read",
+      "/platform/organisations": "organisations:read",
+      "/platform/access": "platform-roles:assign",
+      "/platform/audit": "platform-audit:read",
+    };
+    const requiredPermission = requiredPlatformPermission[path];
+    const hasRequiredPermission = !requiredPermission || platformPermissions.includes(requiredPermission);
+    const isPlatformHome = path === "/" && auth.profile?.organisation === null &&
+      platformPermissions.includes("organisations:read");
+    const title = requiredPermission && auth.status !== "unknown" &&
+      auth.status !== "signedOut" && !hasRequiredPermission
       ? "Access Forbidden"
       : isPlatformHome ? "Platform Administration" : titles[path] ?? "Page not found";
     document.title = `${title} · EKIP`;
@@ -46,15 +59,30 @@ function RoutedApp() {
   if (auth.status === "signedOut") return <LoginPage/>;
 
   const confirmedHealth = kb.healthError ? null : kb.health;
-  if (path === "/" && auth.profile?.organisation === null && auth.profile.platform_permissions.includes("organisations:read")) {
-    return <AppShell active="platform" health={confirmedHealth}><PlatformAdmin/></AppShell>;
+  if (path === "/" && auth.profile?.organisation === null &&
+      auth.profile.platform_permissions.includes("organisations:read")) {
+    return <AppShell active="platform" health={confirmedHealth}>
+      <PlatformAdmin pathname="/platform"/>
+    </AppShell>;
   }
   if (path === "/") return <AppShell active="overview" health={confirmedHealth}><Dashboard/></AppShell>;
   if (path === "/library") return <AppShell active="library" health={confirmedHealth}><DocumentLibrary/></AppShell>;
   if (path === "/workspace") return <AppShell active="workspace" health={confirmedHealth}><Workspace/></AppShell>;
-  if (path === "/platform") return auth.profile?.platform_permissions?.includes("organisations:read")
-    ? <AppShell active="platform" health={confirmedHealth}><PlatformAdmin/></AppShell>
-    : <AppShell active="" health={confirmedHealth}><ForbiddenPage/></AppShell>;
+
+  const platformRoutePermissions: Record<string, string> = {
+    "/platform": "organisations:read",
+    "/platform/organisations": "organisations:read",
+    "/platform/access": "platform-roles:assign",
+    "/platform/audit": "platform-audit:read",
+  };
+  const requiredPlatformPermission = platformRoutePermissions[path];
+
+  if (requiredPlatformPermission) {
+    const allowed = auth.profile?.platform_permissions?.includes(requiredPlatformPermission) === true;
+    return allowed
+      ? <AppShell active="platform" health={confirmedHealth}><PlatformAdmin pathname={path}/></AppShell>
+      : <AppShell active="" health={confirmedHealth}><ForbiddenPage/></AppShell>;
+  }
   if (path === "/tenant/settings") return auth.profile?.organisation && auth.profile.permissions.includes("tenant:read")
     ? <AppShell active="tenant-admin" health={confirmedHealth}><TenantAdmin/></AppShell>
     : <AppShell active="" health={confirmedHealth}><ForbiddenPage/></AppShell>;

@@ -25,6 +25,7 @@ import type {
 } from "./api/types";
 import { Icon } from "./Icons";
 import { useAuth } from "./AuthContext";
+import { navigate } from "./routing";
 
 type PlatformTab = "overview" | "tenants" | "access" | "audit";
 type LifecycleAction = "approve" | "retry" | "recover" | "suspend" | "reactivate";
@@ -55,6 +56,18 @@ const tabs: { id: PlatformTab; label: string }[] = [
   { id: "audit", label: "Platform audit" },
 ];
 
+const platformTabPaths: Record<PlatformTab, string> = {
+  overview: "/platform",
+  tenants: "/platform/organisations",
+  access: "/platform/access",
+  audit: "/platform/audit",
+};
+
+function platformTabFromPath(pathname: string): PlatformTab {
+  const match = Object.entries(platformTabPaths).find(([, route]) => route === pathname);
+  return (match?.[0] as PlatformTab | undefined) ?? "overview";
+}
+
 function statusLabel(status: string) { return status.replaceAll("_", " "); }
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
@@ -65,7 +78,7 @@ function roleLabel(role: PlatformRole) {
   return platformRoleOptions.find((item) => item.value === role)?.label ?? statusLabel(role);
 }
 
-export default function PlatformAdmin() {
+export default function PlatformAdmin({ pathname }: { pathname?: string } = {}) {
   const auth = useAuth();
   const permissions = useMemo(() => new Set(auth.profile?.platform_permissions ?? []), [auth.profile?.platform_permissions]);
   const canRead = permissions.has("organisations:read");
@@ -82,7 +95,16 @@ export default function PlatformAdmin() {
     return canReadAudit;
   }), [canRead, canAssignRoles, canReadAudit]);
 
-  const [activeTab, setActiveTab] = useState<PlatformTab>("overview");
+  const [localActiveTab, setLocalActiveTab] = useState<PlatformTab>("overview");
+  const activeTab = pathname ? platformTabFromPath(pathname) : localActiveTab;
+
+  function selectTab(tab: PlatformTab) {
+    if (pathname) {
+      navigate(platformTabPaths[tab]);
+    } else {
+      setLocalActiveTab(tab);
+    }
+  }
   const [overview, setOverview] = useState<PlatformOverviewResponse | null>(null);
   const [organisations, setOrganisations] = useState<PlatformOrganisation[]>([]);
   const [assignments, setAssignments] = useState<PlatformRoleHolder[]>([]);
@@ -108,8 +130,10 @@ export default function PlatformAdmin() {
   const [roleFeedbackIsError, setRoleFeedbackIsError] = useState(false);
 
   useEffect(() => {
-    if (!visibleTabs.some((tab) => tab.id === activeTab)) setActiveTab(visibleTabs[0]?.id ?? "overview");
-  }, [activeTab, visibleTabs]);
+    if (!pathname && !visibleTabs.some((tab) => tab.id === activeTab)) {
+      setLocalActiveTab(visibleTabs[0]?.id ?? "overview");
+    }
+  }, [pathname, activeTab, visibleTabs]);
 
   const loadOverview = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true); else setLoading(true);
@@ -246,7 +270,7 @@ export default function PlatformAdmin() {
     </section>
 
     <nav className="platform-tabs" role="tablist" aria-label="Platform administration sections">
-      {visibleTabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
+      {visibleTabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => selectTab(tab.id)}>{tab.label}</button>)}
     </nav>
 
     {error && <div className="inline-error" role="alert">{error} <button type="button" className="text-button" onClick={() => void refreshActive()}>Try again</button></div>}

@@ -40,6 +40,13 @@ export default function AppShell({ children, active, health }: { children: React
   const apiConnected = health !== null;
   const platformPermissions = auth.profile?.platform_permissions ?? [];
   const canReadPlatform = platformPermissions.includes("organisations:read");
+  const canAssignPlatformRoles = platformPermissions.includes("platform-roles:assign");
+  const canReadPlatformAudit = platformPermissions.includes("platform-audit:read");
+  const platformEntryPath = canReadPlatform
+    ? "/platform"
+    : canAssignPlatformRoles
+      ? "/platform/access"
+      : "/platform/audit";
   const canReadTenantAdmin = auth.profile?.organisation !== null && auth.profile?.permissions.includes("tenant:read") === true;
   const isPlatformSession = auth.profile?.organisation === null;
   const accountRoleLabel = auth.profile
@@ -55,7 +62,9 @@ export default function AppShell({ children, active, health }: { children: React
   const visibleLinks = [
     ...(auth.profile?.organisation ? links : []),
     ...(canReadTenantAdmin ? [{ href: "/tenant/settings", label: "Organisation", icon: "settings" as IconName, id: "tenant-admin" }] : []),
-    ...(canReadPlatform ? [{ href: "/platform", label: "Platform admin", icon: "settings" as IconName, id: "platform" }] : []),
+    ...((canReadPlatform || canAssignPlatformRoles || canReadPlatformAudit)
+      ? [{ href: platformEntryPath, label: "Platform admin", icon: "settings" as IconName, id: "platform" }]
+      : []),
   ];
   return <div className="app-shell">
     <header className="topbar">
